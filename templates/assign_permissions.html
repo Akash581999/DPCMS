@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Assign User Permissions</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+
+<body>
+    <div class="container mt-5">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <h2 class="mb-4">Assign Permissions to Users</h2>
+
+        {% if users %}
+        <table class="table table-bordered table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>User Id</th>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Profile Pic</th>
+                    <th>Role</th>
+                    <th>Department</th>
+                    <th>Module Assigned</th>
+                    <th>Assign Permissions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.user_id }}</td>
+                    <td>{{ user.full_name }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>
+                        {% if user.profile_image %}
+                        <img src="{{ url_for('static', filename='uploads/' ~ user.profile_image) }}" alt="Profile Pic"
+                            width="50" height="50" style="border-radius: 50%;">
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                    <td>{{ user.role.name | capitalize }}</td>
+                    <td>{{ user.department.name if user.department else 'N/A' }}</td>
+                    <td>
+                        {% if user.user_permissions %}
+                        {% set assigned_modules = user.user_permissions | map(attribute='module.name') | list | unique
+                        %}
+                        {{ assigned_modules | join(', ') }}
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('assign_permissions', user_id=user.user_id) }}">
+                            {% for module in modules %}
+                            <div class="mb-2">
+                                <strong>{{ module.name }}</strong>
+                                <div class="ms-3">
+                                    {% for perm in permissions %}
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="checkbox" name="permissions"
+                                            id="perm-{{ user.user_id }}-{{ module.module_id }}-{{ perm.permission_id }}"
+                                            value="{{ module.module_id }}-{{ perm.permission_id }}" {% if
+                                            (module.module_id, perm.permission_id) in existing_permissions[user.user_id]
+                                            %} checked {% endif %}>
+                                        <label class="form-check-label"
+                                            for="perm-{{ user.user_id }}-{{ module.module_id }}-{{ perm.permission_id }}">
+                                            {{ perm.name }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                            <button type="submit" class="btn btn-sm btn-primary mt-2">Save Permissions</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No users found.</p>
+        {% endif %}
+
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Back</a>
+    </div>
+</body>
+
+</html>

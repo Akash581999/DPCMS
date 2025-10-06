@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Batch Insert</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h2>Auto Batch Insert Control</h2>
+
+        <!-- Batch Status -->
+        <div class="mb-3">
+            {% if batch_status %}
+            <span class="badge bg-success">🟢 Inserting Records...</span>
+            {% else %}
+            <span class="badge bg-danger">🔴 Not Inserting</span>
+            {% endif %}
+        </div>
+
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <!-- Buttons -->
+        <form method="post">
+            <button type="submit" name="action" value="start" class="btn btn-success">Start Inserting</button>
+            <button type="submit" name="action" value="stop" class="btn btn-danger">Stop Inserting</button>
+        </form>
+
+        <!-- Navigation -->
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary mt-5">Back</a>
+        <a href="{{ url_for('uploadcontactscsv') }}" class="btn btn-outline-success mt-5">Upload Contacts CSV</a>
+    </div>
+
+</body>
+
+</html>

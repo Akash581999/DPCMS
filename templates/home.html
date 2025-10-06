@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+        crossorigin="anonymous"></script>
+    <title>Home</title>
+    <style>
+        .bg-image {
+            background-image: url("{{ url_for('static', filename='images/img1.jpeg') }}");
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center center;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar bg-primary navbar-expand-lg bg-body-tertiary" data-bs-theme="dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">DPCMS</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false"
+                aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="{{ url_for('home') }}">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('about') }}">About</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('contacts') }}">Contacts</a>
+                    </li>
+                </ul>
+                <button class="btn btn-outline-success" type="submit"><a class="nav-link"
+                        href="{{ url_for('login') }}">Login</a></button>
+            </div>
+        </div>
+    </nav>
+    <header class="bg-light py-5">
+        <div class="container text-center">
+            <h1 class="display-4 mb-3">Welcome to the Seeker Job Portal</h1>
+            <p class="lead mb-4">
+                A Python Flask project using HTML templates for the front end and SQLAlchemy for PostgreSQL
+                database.<br>
+                This portal connects <strong>Recruiters</strong> and <strong>Job Seekers</strong>, with an
+                <strong>Admin</strong> monitoring all activities.
+            </p>
+            <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg me-2">Get Started</a>
+            <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg">Browse Jobs</a>
+        </div>
+    </header>
+    <section class="container py-5">
+        <div class="row text-center" style="height: 300px;">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <i class="fa-solid fa-user-tie fa-2x mb-3 text-primary"></i>
+                        <h5 class="card-title">For Recruiters</h5>
+                        <p class="card-text">Post jobs, manage applications, and find the best candidates for your
+                            company.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <i class="fa-solid fa-user-graduate fa-2x mb-3 text-success"></i>
+                        <h5 class="card-title">For Job Seekers</h5>
+                        <p class="card-text">Search and apply for jobs, manage your profile, and track your applications
+                            easily.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <i class="fa-solid fa-user-shield fa-2x mb-3 text-warning"></i>
+                        <h5 class="card-title">For Admin</h5>
+                        <p class="card-text">Monitor all activities, manage users and jobs, and ensure smooth portal
+                            operations.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <footer class="bg-dark text-white text-center py-3 fixed-bottom">
+        &copy; {{ current_year if current_year else 2025 }} Seeker Job Portal. All rights reserved.
+    </footer>
+</body>
+
+</html>

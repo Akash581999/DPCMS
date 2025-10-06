@@ -1,0 +1,4 @@
+Flask
+psycopg2-binary  # For PostgreSQL
+# mysql-connector-python  # Uncomment if using MySQL
+Faker

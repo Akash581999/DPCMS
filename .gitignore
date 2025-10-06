@@ -1,0 +1,8 @@
+exported_contacts.csv
+fake_contacts.csv
+*.csv
+*.zip
+*.sqlite3
+*.db
+/temp/
+*.csv

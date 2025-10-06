@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>User CSV Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+
+<body>
+    <div class="container mt-5">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <h1>Upload Contacts CSV</h1>
+
+        <!-- Upload CSV Form -->
+        <form action="{{ url_for('uploadcontactscsv') }}" method="POST" enctype="multipart/form-data" class="mb-3">
+            <label for="csvFile" class="form-label">
+                <h3>Upload CSV File</h3>
+            </label>
+            <input type="file" class="form-control" id="csvFile" name="file" accept=".csv" required>
+            <button type="submit" class="btn btn-outline-primary mt-2">Import CSV</button>
+        </form>
+
+        <!-- Export CSV Button -->
+        <h3>Download CSV File</h3>
+        <form action="{{ url_for('exportcontactscsv') }}" method="GET" class="mb-3">
+            <button type="submit" class="btn btn-outline-success">Export CSV</button>
+        </form>
+
+        <!-- Send Email Form -->
+        <form action="{{ url_for('send_contacts_email') }}" method="POST" enctype="multipart/form-data" class="mb-3">
+            <label for="email" class="form-label">
+                <h3>Send CSV to Email</h3>
+            </label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="Enter recipient email"
+                required>
+
+            <label for="file" class="form-label mt-2">Attach CSV File</label>
+            <input type="file" id="file" name="file" class="form-control" accept=".csv" required>
+
+            <button type="submit" class="btn btn-outline-info mt-3">Send Email</button>
+        </form>
+
+
+        <a href="{{ url_for('showallfeedbacks') }}" class="btn btn-primary mt-4">Back</a>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

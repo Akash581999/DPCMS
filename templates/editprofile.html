@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Edit Profile</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h2 class="mb-4">Edit Profile</h2>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="profile_image" class="form-label">Change Profile Image</label><br>
+                {% if user.profile_image %}
+                <img src="{{ url_for('static', filename='uploads/' + user.profile_image) }}" alt="Profile Image"
+                    class="img-thumbnail" style="max-width: 100px; max-height: 100px; border-radius: 50%;">
+                {% endif %}
+                <input type="file" name="profile_image" class="form-control">
+            </div>
+
+            <div class="mb-3">
+                <label for="fullname" class="form-label">Full Name</label>
+                <input type="text" class="form-control" name="fullname" value="{{ user.full_name }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="mobile_no" class="form-label">Mobile</label>
+                <input type="text" class="form-control" name="mobile_no" value="{{ user.mobile_no }}">
+            </div>
+
+            <div class="mb-3">
+                <label for="company_id" class="form-label">Company</label>
+                <select class="form-select" name="company_id" required>
+                    {% for company in companies %}
+                    <option value="{{ company.company_id }}" {% if company.company_id==user.company_id %}selected{%
+                        endif %}>
+                        {{ company.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="address" class="form-label">Address</label>
+                <textarea class="form-control" name="address">{{ user.address }}</textarea>
+            </div>
+
+            <a href="{{ url_for('profile') }}" class="btn btn-danger">Cancel</a>
+            <button type="submit" class="btn btn-success">Save</button>
+        </form>
+    </div>
+</body>
+
+</html>
