@@ -19,6 +19,11 @@ from models import (
     Role, UserRole, Consent, Contacts
 )
 from sendmail import send_email_with_otp
+from flask_cors import CORS # type: ignore
+
+# After app = Flask(__name__)
+app = Flask(__name__)
+CORS(app)  # ✅ Enables all domains for testing
 
 load_dotenv()
 
@@ -613,6 +618,131 @@ def api_consent(current_user):
         ))
     db.session.commit()
     return jsonify({'status': 'success', 'message': 'Consent recorded.'}), 201
+
+# ----------------------------
+# Consent Form Dynamic Renderer
+# ----------------------------
+from flask import Response, jsonify, request
+
+@app.route('/consentform.js')
+def consentform_js():
+    """
+    This endpoint serves a dynamic JS script that builds the consent form
+    directly inside any external HTML page.
+    """
+    js = """
+(function() {
+  const container = document.createElement('div');
+  container.className = 'container mt-5';
+  document.body.appendChild(container);
+
+  const card = document.createElement('div');
+  card.className = 'card p-4 shadow';
+  container.appendChild(card);
+
+  const title = document.createElement('h3');
+  title.textContent = 'Dynamic Consent Form (Test Mode)';
+  card.appendChild(title);
+
+  const desc = document.createElement('p');
+  desc.textContent = 'Please tick the checkbox and submit your consent.';
+  card.appendChild(desc);
+
+  const form = document.createElement('form');
+  form.id = 'consentForm';
+
+  // Checkbox
+  const div = document.createElement('div');
+  div.className = 'form-check mb-3';
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.name = 'consent_given';
+  checkbox.className = 'form-check-input';
+  const label = document.createElement('label');
+  label.className = 'form-check-label';
+  label.textContent = 'I agree to the data processing terms.';
+  div.appendChild(checkbox);
+  div.appendChild(label);
+  form.appendChild(div);
+
+  // Language select
+  const langDiv = document.createElement('div');
+  langDiv.className = 'mb-3';
+  const select = document.createElement('select');
+  select.name = 'language';
+  select.className = 'form-select';
+  ['English', 'Hindi', 'Tamil', 'Telugu'].forEach(function(l) {
+    const o = document.createElement('option');
+    o.value = l;
+    o.textContent = l;
+    select.appendChild(o);
+  });
+  langDiv.appendChild(select);
+  form.appendChild(langDiv);
+
+  // Submit button
+  const btn = document.createElement('button');
+  btn.type = 'submit';
+  btn.className = 'btn btn-primary';
+  btn.textContent = 'Submit';
+  form.appendChild(btn);
+
+  const msg = document.createElement('div');
+  msg.className = 'mt-3';
+  form.appendChild(msg);
+  card.appendChild(form);
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    msg.innerHTML = '';
+
+    const formData = new FormData(form);
+    const payload = {
+      consent_given: formData.get('consent_given') === 'on',
+      language: formData.get('language')
+    };
+
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/consent/test', {  // ✅ explicit full URL
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        msg.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+      } else {
+        msg.innerHTML = '<div class="alert alert-danger">' + (data.message || 'Error') + '</div>';
+      }
+    } catch (err) {
+      console.error(err);
+      msg.innerHTML = '<div class="alert alert-danger">Network error</div>';
+    }
+  });
+})();
+"""
+    return Response(js, mimetype="application/javascript")
+
+
+@app.route('/consentpage')
+def consentpage():
+    """A simple placeholder route."""
+    return 'Consent form script endpoint is working!'
+
+
+@app.route('/api/consent/test', methods=['POST'])
+def api_consent_test():
+    """Temporary public consent submission (no login required)."""
+    data = request.get_json() or {}
+    consent_given = data.get('consent_given')
+    language = data.get('language')
+
+    if not consent_given:
+        return jsonify({'status': 'error', 'message': 'Please agree to continue.'}), 400
+
+    print(f"[TEST] Consent received: given={consent_given}, language={language}")
+    return jsonify({'status': 'success', 'message': f'Consent recorded (Language: {language}).'}), 201
 
 # ----------------------------------------------------------------
 # Admin view all consents
