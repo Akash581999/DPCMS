@@ -277,24 +277,52 @@ class MailMessage(db.Model):
 # Consent Forms
 # ---------------------------------------------------------------------
 class ConsentForm(db.Model):
-    __tablename__ = "consent_forms"
+    __tablename__ = "consent_form"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    form_name = db.Column(db.String(100), nullable=False)
+    form_name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Each form can have multiple fields (input, checkbox, select)
-    fields = db.relationship("FormField", back_populates="form", cascade="all, delete-orphan")
+    # Relationship: one form has many fields
+    fields = db.relationship("ConsentField", back_populates="form", cascade="all, delete-orphan")
 
-class FormField(db.Model):
-    __tablename__ = "form_fields"
+    def __repr__(self):
+        return f"<ConsentForm {self.form_name}>"
+
+class ConsentField(db.Model):
+    __tablename__ = "consent_field"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    form_id = db.Column(db.Integer, db.ForeignKey("consent_forms.id"), nullable=False)
-
+    form_id = db.Column(db.Integer, db.ForeignKey("consent_form.id", ondelete="CASCADE"), nullable=False)
     label = db.Column(db.String(255), nullable=False)
-    field_type = db.Column(db.String(50), nullable=False)  # e.g., text, email, checkbox, select
-    options = db.Column(db.Text, nullable=True)  # comma-separated values for select
+    field_type = db.Column(db.String(50), nullable=False)  # e.g., text, email, select, checkbox
     required = db.Column(db.Boolean, default=False)
+    options = db.Column(db.Text, nullable=True)  # for dropdown/select fields (comma-separated)
 
+    # Relationship back to form
     form = db.relationship("ConsentForm", back_populates="fields")
+
+    def __repr__(self):
+        return f"<ConsentField {self.label} ({self.field_type})>"
+    
+class ExternalConsent(db.Model):
+    __tablename__ = "external_consents"
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    form_id = db.Column(db.Integer, db.ForeignKey("consent_form.id", ondelete="SET NULL"))
+    fullname = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    phone = db.Column(db.String(50))
+    language = db.Column(db.String(50))
+    consent_given = db.Column(db.Boolean, default=False)
+    data_payload = db.Column(db.JSON, nullable=True)
+    ip_address = db.Column(db.String(100))
+    user_agent = db.Column(db.String(255))
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    form = db.relationship("ConsentForm", backref=db.backref("submissions", lazy=True, cascade="all, delete-orphan"))
+
+    def __repr__(self):
+        return f"<ExternalConsent {self.email} ({self.form_id})>"

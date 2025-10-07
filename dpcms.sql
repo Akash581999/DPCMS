@@ -26,6 +26,8 @@ SELECT * FROM public.contacts;
 
 SELECT * FROM public.mail_messages;
 
-SELECT * FROM public.consent_forms;
+SELECT * FROM public.consent_form;
 
-SELECT * FROM public.form_fields;
+SELECT * FROM public.consent_field;
+
+SELECT * FROM public.external_consents;
