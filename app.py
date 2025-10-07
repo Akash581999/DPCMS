@@ -685,8 +685,7 @@ def consentform_js(form_id):
     # Build the JS to render + submit the form
     js = f"""
 (function() {{
-  console.log("📜 Dynamic Consent Form Loaded (ID {form_id})");
-
+  console.log("📜 Dynamic Consent Form (ID {form_id}) Loaded");
   var container = document.getElementById('consent-form') || document.body;
   var form = document.createElement('form');
   form.id = 'dynamicConsentForm';
@@ -702,21 +701,14 @@ def consentform_js(form_id):
   msg.style.marginTop = '10px';
   form.appendChild(msg);
 
-  // Handle form submission
   form.addEventListener('submit', async function(e) {{
     e.preventDefault();
     msg.textContent = '';
 
     const formData = new FormData(form);
-    const payload = {{}};
+    const payload = {{ form_id: {form_id} }};  // ✅ include form_id
     formData.forEach((value, key) => {{
-      // Handle checkboxes explicitly
-      const input = form.querySelector(`[name="{{'{{'}}${{key}}{{'}}'}}"]`);
-      if (input && input.type === 'checkbox') {{
-        payload[key] = input.checked;
-      }} else {{
-        payload[key] = value;
-      }}
+      payload[key.toLowerCase()] = value;
     }});
 
     console.log("📤 Submitting payload:", payload);
@@ -727,10 +719,13 @@ def consentform_js(form_id):
         headers: {{ 'Content-Type': 'application/json' }},
         body: JSON.stringify(payload)
       }});
+
       const data = await res.json();
-      msg.textContent = res.ok
-        ? "✅ " + data.message
-        : "❌ " + (data.message || "Error submitting consent.");
+      if (res.ok) {{
+        msg.textContent = "✅ " + data.message;
+      }} else {{
+        msg.textContent = "❌ " + (data.message || 'Error submitting consent.');
+      }}
     }} catch (err) {{
       console.error(err);
       msg.textContent = "⚠️ Network error — check Flask server.";
@@ -745,27 +740,35 @@ def consentform_js(form_id):
 
 @app.route('/api/consent/test', methods=['POST'])
 def api_consent_test():
-    """Store dynamic form submissions into database (only once per user)."""
+    """Store dynamic form submissions into database (only once per user per form)."""
     data = request.get_json() or {}
     data = {k.lower(): v for k, v in data.items()}  # normalize keys
 
     fullname = data.get('fullname')
     email = data.get('email')
+    form_id = data.get('form_id')  # ✅ get form_id from payload
 
     if not fullname or not email:
         return jsonify({'status': 'error', 'message': 'Fullname and email are required.'}), 400
+    if not form_id:
+        return jsonify({'status': 'error', 'message': 'Form ID missing.'}), 400
 
-    # ✅ Check if this user already gave consent
-    existing_consent = ExternalConsent.query.filter_by(email=email).first()
+    # ✅ Ensure the form exists
+    form = ConsentForm.query.get(form_id)
+    if not form:
+        return jsonify({'status': 'error', 'message': 'Invalid form ID.'}), 404
+
+    # ✅ Prevent duplicate consent for same form + email
+    existing_consent = ExternalConsent.query.filter_by(email=email, form_id=form_id).first()
     if existing_consent:
         return jsonify({
             'status': 'info',
-            'message': f'Consent already recorded for {fullname or email}.'
+            'message': f'Consent already recorded for {fullname or email} on form {form_id}.'
         }), 200
 
     # ✅ Create new consent
     new_consent = ExternalConsent(
-        form_id=1,  # dynamic later
+        form_id=form_id,
         fullname=fullname,
         email=email,
         phone=data.get('phone'),
@@ -779,8 +782,8 @@ def api_consent_test():
     db.session.add(new_consent)
     db.session.commit()
 
-    print(f"[SAVED] Consent received from {fullname} ({email})")
-    return jsonify({'status': 'success', 'message': f'Consent recorded for {fullname}.'}), 201
+    print(f"[SAVED] Consent received from {fullname} ({email}) for form {form_id}")
+    return jsonify({'status': 'success', 'message': f'Consent recorded for {fullname} (Form ID: {form_id}).'}), 201
 
 # ----------------------------------------------------------------
 # Admin view all consents

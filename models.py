@@ -310,7 +310,7 @@ class ConsentField(db.Model):
 class ExternalConsent(db.Model):
     __tablename__ = "external_consents"
     __table_args__ = (
-        db.UniqueConstraint("fullname", "email", name="uq_external_consent_user"),
+        db.UniqueConstraint("form_id", "fullname", "email", name="uq_external_consent_user"),
     )
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     form_id = db.Column(db.Integer, db.ForeignKey("consent_form.id", ondelete="SET NULL"))
