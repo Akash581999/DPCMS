@@ -745,19 +745,27 @@ def consentform_js(form_id):
 
 @app.route('/api/consent/test', methods=['POST'])
 def api_consent_test():
-    """Receive and store dynamic form submissions into DB."""
+    """Store dynamic form submissions into database (only once per user)."""
     data = request.get_json() or {}
-    data = {k.lower().replace(" ", ""): v for k, v in data.items()}  # normalize
+    data = {k.lower(): v for k, v in data.items()}  # normalize keys
 
     fullname = data.get('fullname')
     email = data.get('email')
 
     if not fullname or not email:
-        print("[DEBUG] Payload missing fields:", data)
         return jsonify({'status': 'error', 'message': 'Fullname and email are required.'}), 400
 
+    # ✅ Check if this user already gave consent
+    existing_consent = ExternalConsent.query.filter_by(email=email).first()
+    if existing_consent:
+        return jsonify({
+            'status': 'info',
+            'message': f'Consent already recorded for {fullname or email}.'
+        }), 200
+
+    # ✅ Create new consent
     new_consent = ExternalConsent(
-        form_id=1,  # static for now, or dynamically pass from frontend
+        form_id=1,  # dynamic later
         fullname=fullname,
         email=email,
         phone=data.get('phone'),
@@ -771,7 +779,7 @@ def api_consent_test():
     db.session.add(new_consent)
     db.session.commit()
 
-    print(f"[✅ SAVED] Consent from {fullname} <{email}>")
+    print(f"[SAVED] Consent received from {fullname} ({email})")
     return jsonify({'status': 'success', 'message': f'Consent recorded for {fullname}.'}), 201
 
 # ----------------------------------------------------------------
