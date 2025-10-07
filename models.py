@@ -272,3 +272,29 @@ class MailMessage(db.Model):
 
     def __repr__(self):
         return f"<MailMessage {self.template_type}>"
+    
+# ---------------------------------------------------------------------
+# Consent Forms
+# ---------------------------------------------------------------------
+class ConsentForm(db.Model):
+    __tablename__ = "consent_forms"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    form_name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+
+    # Each form can have multiple fields (input, checkbox, select)
+    fields = db.relationship("FormField", back_populates="form", cascade="all, delete-orphan")
+
+class FormField(db.Model):
+    __tablename__ = "form_fields"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    form_id = db.Column(db.Integer, db.ForeignKey("consent_forms.id"), nullable=False)
+
+    label = db.Column(db.String(255), nullable=False)
+    field_type = db.Column(db.String(50), nullable=False)  # e.g., text, email, checkbox, select
+    options = db.Column(db.Text, nullable=True)  # comma-separated values for select
+    required = db.Column(db.Boolean, default=False)
+
+    form = db.relationship("ConsentForm", back_populates="fields")

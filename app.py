@@ -16,7 +16,7 @@ from dotenv import load_dotenv # type: ignore
 from config import Config
 from models import (
     db, bcrypt, Users, DataFiduciary, Purpose,
-    Role, UserRole, Consent, Contacts
+    Role, UserRole, Consent, Contacts, ConsentForm
 )
 from sendmail import send_email_with_otp
 from flask_cors import CORS # type: ignore
@@ -624,125 +624,115 @@ def api_consent(current_user):
 # ----------------------------
 from flask import Response, jsonify, request
 
-@app.route('/consentform.js')
-def consentform_js():
-    """
-    This endpoint serves a dynamic JS script that builds the consent form
-    directly inside any external HTML page.
-    """
-    js = """
-(function() {
-  const container = document.createElement('div');
-  container.className = 'container mt-5';
-  document.body.appendChild(container);
+@app.route('/consentform/<int:form_id>.js')
+def consentform_js(form_id):
+    form = ConsentForm.query.get(form_id)
+    if not form:
+        return Response("console.error('Form not found');", mimetype="application/javascript")
 
-  const card = document.createElement('div');
-  card.className = 'card p-4 shadow';
-  container.appendChild(card);
+    js_fields = ""
+    for field in form.fields:
+        if field.field_type == "select":
+            opts = "".join([f"""
+                var opt = document.createElement('option');
+                opt.value = '{opt.strip()}';
+                opt.textContent = '{opt.strip()}';
+                select.appendChild(opt);
+            """ for opt in field.options.split(",")])
+            js_fields += f"""
+            var label = document.createElement('label');
+            label.textContent = '{field.label}: ';
+            var select = document.createElement('select');
+            select.name = '{field.label.lower().replace(" ", "_")}';
+            {"select.required = true;" if field.required else ""}
+            {opts}
+            form.appendChild(label);
+            form.appendChild(select);
+            form.appendChild(document.createElement("br"));
+            """
+        elif field.field_type == "checkbox":
+            js_fields += f"""
+            var checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.name = '{field.label.lower().replace(" ", "_")}';
+            {"checkbox.required = true;" if field.required else ""}
+            form.appendChild(checkbox);
+            form.appendChild(document.createTextNode(' {field.label}'));
+            form.appendChild(document.createElement("br"));
+            """
+        else:
+            js_fields += f"""
+            var label = document.createElement('label');
+            label.textContent = '{field.label}: ';
+            var input = document.createElement('input');
+            input.type = '{field.field_type}';
+            input.name = '{field.label.lower().replace(" ", "_")}';
+            {"input.required = true;" if field.required else ""}
+            form.appendChild(label);
+            form.appendChild(input);
+            form.appendChild(document.createElement("br"));
+            """
 
-  const title = document.createElement('h3');
-  title.textContent = 'Dynamic Consent Form (Test Mode)';
-  card.appendChild(title);
+    js = f"""
+(function() {{
+  var container = document.getElementById('consent-form') || document.body;
+  var form = document.createElement('form');
+  form.id = 'dynamicConsentForm';
 
-  const desc = document.createElement('p');
-  desc.textContent = 'Please tick the checkbox and submit your consent.';
-  card.appendChild(desc);
+  {js_fields}
 
-  const form = document.createElement('form');
-  form.id = 'consentForm';
+  var button = document.createElement('button');
+  button.textContent = 'Submit';
+  button.type = 'submit';
+  form.appendChild(button);
 
-  // Checkbox
-  const div = document.createElement('div');
-  div.className = 'form-check mb-3';
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.name = 'consent_given';
-  checkbox.className = 'form-check-input';
-  const label = document.createElement('label');
-  label.className = 'form-check-label';
-  label.textContent = 'I agree to the data processing terms.';
-  div.appendChild(checkbox);
-  div.appendChild(label);
-  form.appendChild(div);
-
-  // Language select
-  const langDiv = document.createElement('div');
-  langDiv.className = 'mb-3';
-  const select = document.createElement('select');
-  select.name = 'language';
-  select.className = 'form-select';
-  ['English', 'Hindi', 'Tamil', 'Telugu'].forEach(function(l) {
-    const o = document.createElement('option');
-    o.value = l;
-    o.textContent = l;
-    select.appendChild(o);
-  });
-  langDiv.appendChild(select);
-  form.appendChild(langDiv);
-
-  // Submit button
-  const btn = document.createElement('button');
-  btn.type = 'submit';
-  btn.className = 'btn btn-primary';
-  btn.textContent = 'Submit';
-  form.appendChild(btn);
-
-  const msg = document.createElement('div');
-  msg.className = 'mt-3';
+  var msg = document.createElement('div');
   form.appendChild(msg);
-  card.appendChild(form);
 
-  form.addEventListener('submit', async function(e) {
+  form.addEventListener('submit', async function(e) {{
     e.preventDefault();
-    msg.innerHTML = '';
+    msg.textContent = 'Submitting...';
 
     const formData = new FormData(form);
-    const payload = {
-      consent_given: formData.get('consent_given') === 'on',
-      language: formData.get('language')
-    };
+    const payload = Object.fromEntries(formData.entries());
 
-    try {
-      const res = await fetch('http://127.0.0.1:5000/api/consent/test', {  // ✅ explicit full URL
+    try {{
+      const res = await fetch('http://127.0.0.1:5000/api/consent/test', {{
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {{ 'Content-Type': 'application/json' }},
         body: JSON.stringify(payload)
-      });
-
+      }});
       const data = await res.json();
-      if (res.ok) {
-        msg.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
-      } else {
-        msg.innerHTML = '<div class="alert alert-danger">' + (data.message || 'Error') + '</div>';
-      }
-    } catch (err) {
-      console.error(err);
-      msg.innerHTML = '<div class="alert alert-danger">Network error</div>';
-    }
-  });
-})();
+      msg.textContent = res.ok ? '✅ ' + data.message : '❌ ' + (data.message || 'Error');
+    }} catch (err) {{
+      msg.textContent = '⚠️ Network error';
+    }}
+  }});
+
+  container.appendChild(form);
+}})();
 """
     return Response(js, mimetype="application/javascript")
 
-
-@app.route('/consentpage')
-def consentpage():
-    """A simple placeholder route."""
-    return 'Consent form script endpoint is working!'
-
-
 @app.route('/api/consent/test', methods=['POST'])
 def api_consent_test():
-    """Temporary public consent submission (no login required)."""
+    """Public test endpoint — no authentication required."""
     data = request.get_json() or {}
+    name = data.get('name')
+    email = data.get('email')
     consent_given = data.get('consent_given')
     language = data.get('language')
 
+    if not name or not email:
+        return jsonify({'status': 'error', 'message': 'Name and Email are required.'}), 400
     if not consent_given:
-        return jsonify({'status': 'error', 'message': 'Please agree to continue.'}), 400
+        return jsonify({'status': 'error', 'message': 'You must agree to continue.'}), 400
 
-    print(f"[TEST] Consent received: given={consent_given}, language={language}")
-    return jsonify({'status': 'success', 'message': f'Consent recorded (Language: {language}).'}), 201
+    print(f"[TEST CONSENT] Name={name}, Email={email}, Language={language}, Consent={consent_given}")
+    return jsonify({
+        'status': 'success',
+        'message': f"Consent recorded for {name} in {language}."
+    }), 201
 
 # ----------------------------------------------------------------
 # Admin view all consents
