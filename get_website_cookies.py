@@ -1,36 +1,121 @@
-from selenium import webdriver # type: ignore
-from selenium.webdriver.chrome.service import Service # type: ignore
-from selenium.webdriver.chrome.options import Options # type: ignore
-from webdriver_manager.chrome import ChromeDriverManager # type: ignore
+# from selenium import webdriver # type: ignore
+# from selenium.webdriver.chrome.service import Service # type: ignore
+# from selenium.webdriver.chrome.options import Options # type: ignore
+# from webdriver_manager.chrome import ChromeDriverManager # type: ignore
+# import json
+# import time
+
+# def get_cookies_from_site(url):
+#     # Set up Chrome options
+#     chrome_options = Options()
+#     chrome_options.add_argument("--headless")  # Run Chrome without UI
+#     chrome_options.add_argument("--no-sandbox")
+#     chrome_options.add_argument("--disable-dev-shm-usage")
+
+#     # Launch Chrome
+#     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+
+#     # Visit the target website
+#     driver.get(url)
+
+#     # Wait a few seconds for all cookies to load
+#     time.sleep(3)
+
+#     # Fetch cookies visible to JavaScript (session + persistent)
+#     cookies = driver.get_cookies()
+
+#     # Print cookies in terminal
+#     print(f"\n=== Cookies for {url} ===")
+#     print(json.dumps(cookies, indent=2))
+
+#     # Close browser
+#     driver.quit()
+
+# if __name__ == "__main__":
+#     site = input("Enter the website URL (e.g., https://example.com): ").strip()
+#     get_cookies_from_site(site)
+
+
+
+# ✅ Example (with requests) without selenium and playwright
+# import requests
+# import json
+
+# url = input("Enter website URL (e.g., https://example.com): ").strip()
+
+# session = requests.Session()
+# response = session.get(url)
+
+# cookies_list = []
+# for cookie in session.cookies:
+#     cookies_list.append({
+#         "name": cookie.name,
+#         "value": cookie.value,
+#         "domain": cookie.domain,
+#         "path": cookie.path,
+#         "expires": cookie.expires,
+#         "secure": cookie.secure,
+#     })
+
+# print(f"\n=== Cookies from {url} ===")
+# print(json.dumps(cookies_list, indent=2))
+
+
+# ✅ Example (including JS-set cookies) without selenium and playwright
+import sqlite3
+import os
 import json
-import time
+from urllib.parse import urlparse
 
-def get_cookies_from_site(url):
-    # Set up Chrome options
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run Chrome without UI
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+url = input("Enter the website URL (e.g., https://example.com): ").strip()
+parsed_url = urlparse(url)
+domain = parsed_url.netloc
 
-    # Launch Chrome
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+if domain.startswith("www."):
+    domain = domain[4:]  # remove www. for matching
 
-    # Visit the target website
-    driver.get(url)
+chrome_path = os.path.expanduser("~/.config/google-chrome/Default/Cookies")
 
-    # Wait a few seconds for all cookies to load
-    time.sleep(3)
+if not os.path.exists(chrome_path):
+    raise FileNotFoundError("Couldn't find Chrome cookies DB. Adjust the path if necessary.")
 
-    # Fetch cookies visible to JavaScript (session + persistent)
-    cookies = driver.get_cookies()
+conn = sqlite3.connect(chrome_path)
+cursor = conn.cursor()
 
-    # Print cookies in terminal
-    print(f"\n=== Cookies for {url} ===")
-    print(json.dumps(cookies, indent=2))
+query = """
+SELECT host_key, name, value, path, expires_utc, is_secure, is_httponly 
+FROM cookies
+WHERE host_key LIKE ?
+"""
+cursor.execute(query, (f"%{domain}%",))
+rows = cursor.fetchall()
 
-    # Close browser
-    driver.quit()
+cookies = []
+for r in rows:
+    cookies.append({
+        "domain": r[0],
+        "name": r[1],
+        "value": r[2],
+        "path": r[3],
+        "expires": r[4],
+        "secure": bool(r[5]),
+        "httpOnly": bool(r[6])
+    })
 
-if __name__ == "__main__":
-    site = input("Enter the website URL (e.g., https://example.com): ").strip()
-    get_cookies_from_site(site)
+conn.close()
+
+print(f"\n=== Cookies stored in Chrome for {domain} ===")
+print(json.dumps(cookies, indent=2))
+
+
+# To check whether cookies are present in chrome of not
+# import sqlite3, os
+# for p in ["Default", "Profile 1", "Profile 2"]:
+#     path = os.path.expanduser(f"~/.config/google-chrome/{p}/Cookies")
+#     if os.path.exists(path):
+#         print(f"\n>>> Checking {p}")
+#         conn = sqlite3.connect(path)
+#         cursor = conn.cursor()
+#         cursor.execute("SELECT DISTINCT host_key FROM cookies LIMIT 20")
+#         print([r[0] for r in cursor.fetchall()])
+#         conn.close()
