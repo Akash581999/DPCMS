@@ -1,44 +1,42 @@
-from selenium import webdriver  # type: ignore
-from selenium.webdriver.chrome.service import Service  # type: ignore
-from selenium.webdriver.chrome.options import Options  # type: ignore
-from webdriver_manager.chrome import ChromeDriverManager  # type: ignore
-import json
-import time
+import pychrome, json, time, subprocess, contextlib # type: ignore
 
-def get_all_browser_cookies(url):
-    # Set up Chrome options
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")  # Headless mode
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--remote-debugging-port=9222")  # enable CDP
+subprocess.Popen([
+    "google-chrome",
+    "--remote-debugging-port=9222",
+    "--user-data-dir=/tmp/chrome-profile",
+    "--headless",
+    "--disable-gpu",
+    "--no-sandbox",
+    "--ignore-certificate-errors",
+    "--allow-insecure-localhost",
+    "--disable-logging",
+    "--log-level=3"
+])
+time.sleep(2)
 
-    # Launch Chrome browser
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+def get_all_cookies(url):
+    browser = pychrome.Browser(url="http://127.0.0.1:9222")
+    tab = browser.new_tab()
+    tab.start()
+    tab.call_method("Network.enable")
+    tab.call_method("Page.navigate", url=url)
 
-    # Visit target site
-    driver.get(url)
-    time.sleep(3)  # wait for all cookies (including JS/async) to load
+    time.sleep(5)
 
-    # === Fetch all browser cookies via Chrome DevTools Protocol ===
-    all_cookies = driver.execute_cdp_cmd("Network.getAllCookies", {})
+    cookies = tab.call_method("Network.getAllCookies")
 
-    # Extract cookie list
-    cookies_list = all_cookies.get("cookies", [])
-
-    # Print formatted JSON
     print(f"\n=== All Browser Cookies for {url} ===")
-    print(json.dumps(cookies_list, indent=2))
+    print(json.dumps(cookies["cookies"], indent=2))
+    print(f"\nTotal cookies retrieved: {len(cookies['cookies'])}")
 
-    # Optional: print total count
-    print(f"\nTotal cookies retrieved: {len(cookies_list)}")
-
-    # Close the browser
-    driver.quit()
+    time.sleep(1)
+    with contextlib.suppress(Exception):
+        tab.stop()
+        browser.close_tab(tab)
 
 if __name__ == "__main__":
     site = input("Enter the website URL (e.g., https://example.com): ").strip()
-    get_all_browser_cookies(site)
+    get_all_cookies(site)
 
 
 # ✅ Example (with requests) without selenium and playwright
