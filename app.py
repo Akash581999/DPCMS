@@ -225,12 +225,127 @@ def verify_otp():
             flash("User not found.", "danger")
             return redirect(url_for('register'))
 
+        # ✅ OTP verified — clear registration data
         session.pop('registration_data', None)
-        session['id'] = user.id
-        flash("Email verified successfully. Proceed to consent.", "success")
+        session['user_id_for_consent'] = user.id  # store for consent step
+        flash("Email verified successfully. Please review the consent form.", "success")
         return redirect(url_for('consent'))
 
     return render_template('verify_otp.html')
+
+# ----------------------------------------------------------------
+# Consent routes
+# ----------------------------------------------------------------
+@app.route('/consent', methods=['GET', 'POST'])
+def consent():
+    user_id = session.get('user_id_for_consent')
+    if not user_id:
+        flash("Session expired. Please verify again.", "warning")
+        return redirect(url_for('register'))
+
+    user = Users.query.get(user_id)
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for('register'))
+
+    purpose = Purpose.query.filter_by(purpose_name="User registration").first()
+    fiduciary = DataFiduciary.query.filter_by(name="DPDP Consultants").first()
+    if not purpose or not fiduciary:
+        flash("Setup error: Missing Purpose or Fiduciary.", "danger")
+        return redirect(url_for('register'))
+
+    existing = Consent.query.filter_by(user_id=user.id).first()
+    if existing and existing.status == "granted":
+        flash("Consent already given. You can now log in.", "info")
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        consent_given = request.form.get('consent_given') == 'on'
+        if not consent_given:
+            flash("You must agree to proceed.", "warning")
+            return redirect(url_for('consent'))
+
+        # ✅ Create or update consent
+        if existing:
+            existing.status = "granted"
+            existing.timestamp = datetime.utcnow()
+            existing.method = "checkbox"
+        else:
+            new_consent = Consent(
+                user_id=user.id,
+                purpose_id=purpose.id,
+                fiduciary_id=fiduciary.id,
+                status="granted",
+                method="checkbox",
+                timestamp=datetime.utcnow()
+            )
+            db.session.add(new_consent)
+        db.session.commit()
+
+        # ✅ Redirect to login after successful consent
+        session.pop('user_id_for_consent', None)
+        flash("Consent recorded successfully. You may now log in.", "success")
+        return redirect(url_for('login'))
+    return render_template('consent_form.html', user=user)
+
+@app.route('/api/consent', methods=['POST'])
+@token_required
+def api_consent(current_user):
+    """Collect and record user consent via API (only once per user per purpose)."""
+    data = request.get_json() or {}
+
+    consent_given = data.get('consent_given')
+    method = data.get('method', 'api')
+
+    if consent_given not in [True, 'true', 'True', 1, '1']:
+        return jsonify({'status': 'error', 'message': 'Consent not provided.'}), 400
+
+    # Fetch purpose and fiduciary dynamically
+    purpose = Purpose.query.filter_by(purpose_name="User registration").first()
+    fiduciary = DataFiduciary.query.filter_by(name="DPDP Consultants").first()
+
+    if not purpose or not fiduciary:
+        return jsonify({
+            'status': 'error',
+            'message': 'System setup error — missing Purpose or Fiduciary.'
+        }), 500
+
+    # ✅ Check if this user already gave consent for this purpose
+    existing = Consent.query.filter_by(
+        user_id=current_user.id,
+        purpose_id=purpose.id
+    ).first()
+
+    if existing and existing.status == "granted":
+        return jsonify({
+            'status': 'info',
+            'message': 'Consent already recorded for this purpose.'
+        }), 200
+
+    # ✅ Create or update consent
+    if existing:
+        existing.status = "granted"
+        existing.method = method
+        existing.timestamp = datetime.utcnow()
+    else:
+        new_consent = Consent(
+            user_id=current_user.id,
+            purpose_id=purpose.id,
+            fiduciary_id=fiduciary.id,
+            status="granted",
+            method=method,
+            timestamp=datetime.utcnow(),
+            expiry_date=None,
+            language=data.get('language')
+        )
+        db.session.add(new_consent)
+
+    db.session.commit()
+
+    return jsonify({
+        'status': 'success',
+        'message': f'Consent successfully recorded for user {current_user.fullname}.'
+    }), 201
 
 # ----------------------------------------------------------------
 # Login / Logout
@@ -267,7 +382,6 @@ def login():
         flash(f"Welcome {user.fullname}!", "success")
         return redirect(url_for('dashboard'))
     return render_template('login.html')
-
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
@@ -384,51 +498,56 @@ def api_reset_password():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    """Main user dashboard."""
     if not has_valid_consent(current_user):
         flash("Consent missing or expired.", "warning")
         return redirect(url_for('consent'))
+
     return render_template('dashboard.html', user=current_user)
 
 @app.route('/api/dashboard', methods=['GET'])
 @token_required
 def api_dashboard(current_user):
+    """API endpoint for dashboard info."""
     if not has_valid_consent(current_user):
         return jsonify({
             'message': 'Consent required',
             'consent_required': True
         }), 403
+
     return jsonify({
         'message': f"Welcome {current_user.fullname}",
         'email': current_user.email,
-        'roles': [ur.role.role_name for ur in current_user.roles]
+        'roles': [ur.role.role_name for ur in current_user.roles] if current_user.roles else []
     }), 200
 
 @app.route('/profile')
 @login_required
 def profile():
-    if 'user_id' not in session:
+    """Show logged-in user profile."""
+    user = current_user
+
+    if not user.is_authenticated:
         flash('Please log in to view your profile.', 'warning')
         return redirect(url_for('login'))
 
-    user = Users.query.get(session['user_id'])
+    # Query the company where the current user is the DPO
+    company = DataFiduciary.query.filter_by(dpo_id=user.id).first()
 
-    if not user or user.session_token != session.get('session_token'):
-        flash('Invalid session. Please log in again.', 'danger')
-        return redirect(url_for('login'))
-    return render_template('profile.html', user=user)
+    return render_template('profile.html', user=user, company=company)
 
 @app.route('/api/profile', methods=['GET'])
 @token_required
 def api_profile(current_user):
+    """API endpoint for profile data."""
     if not current_user:
         return jsonify({'message': 'User not found.'}), 404
 
     profile_data = {
-        'user_id': current_user.user_id,
+        'user_id': current_user.id,
         'email': current_user.email,
-        'full_name': current_user.full_name,
-        'role': current_user.role.name if current_user.role else None,
-        'department': current_user.department.name if current_user.department else None,
+        'fullname': current_user.fullname,
+        'roles': [ur.role.role_name for ur in current_user.roles] if current_user.roles else [],
         'is_active': current_user.is_active,
         'last_login': current_user.last_login.strftime('%Y-%m-%d %H:%M:%S') if current_user.last_login else None
     }
@@ -437,15 +556,12 @@ def api_profile(current_user):
 @app.route('/editprofile', methods=['GET', 'POST'])
 @login_required
 def editprofile():
-    if 'user_id' not in session:
-        flash('Please log in first.', 'warning')
-        return redirect(url_for('login'))
-
-    user = Users.query.get(session['user_id'])
+    """Edit profile info (UI)."""
+    user = current_user
     companies = DataFiduciary.query.all()
 
     if request.method == 'POST':
-        user.full_name = request.form.get('fullname')
+        user.fullname = request.form.get('fullname')
         user.mobile_no = request.form.get('mobile_no')
         user.address = request.form.get('address')
 
@@ -453,7 +569,7 @@ def editprofile():
         if new_company_id:
             company = DataFiduciary.query.get(new_company_id)
             if company:
-                user.company_id = company.company_id
+                user.company_id = company.id
             else:
                 flash("Selected company doesn't exist.", 'danger')
                 return render_template('editprofile.html', user=user, companies=companies)
@@ -469,29 +585,30 @@ def editprofile():
         db.session.commit()
         flash('Profile updated successfully!', 'success')
         return redirect(url_for('profile'))
+
     return render_template('editprofile.html', user=user, companies=companies)
 
 @app.route('/api/editprofile', methods=['POST'])
 @token_required
 def api_edit_profile(current_user):
+    """API endpoint to update profile."""
     data = request.get_json()
-    full_name = data.get('full_name')
-    mobile_no = data.get('mobile_no')
-    address = data.get('address')
-    company_id = data.get('company_id')
 
-    if full_name:
-        current_user.full_name = full_name
-    if mobile_no:
-        current_user.mobile_no = mobile_no
-    if address:
-        current_user.address = address
-    if company_id:
-        company = DataFiduciary.query.get(company_id)
-        if company:
-            current_user.company_id = company.company_id
-        else:
-            return jsonify({'message': "Selected company doesn't exist."}), 400
+    if not data:
+        return jsonify({'message': 'No data provided'}), 400
+
+    if 'fullname' in data:
+        current_user.fullname = data['fullname']
+    if 'mobile_no' in data:
+        current_user.mobile_no = data['mobile_no']
+    if 'address' in data:
+        current_user.address = data['address']
+
+    if 'company_id' in data:
+        company = DataFiduciary.query.get(data['company_id'])
+        if not company:
+            return jsonify({'message': 'Invalid company ID.'}), 400
+        current_user.company_id = company.id
 
     db.session.commit()
     return jsonify({'message': 'Profile updated successfully!'}), 200
@@ -499,7 +616,8 @@ def api_edit_profile(current_user):
 @app.route('/changepassword', methods=['GET', 'POST'])
 @login_required
 def changepassword():
-    user = Users.query.get(session['user_id'])
+    """Change password (UI)."""
+    user = current_user
 
     if request.method == 'POST':
         current_password = request.form.get('current_password')
@@ -518,12 +636,17 @@ def changepassword():
         db.session.commit()
         flash('Password updated successfully.', 'success')
         return redirect(url_for('dashboard'))
+
     return render_template('changepassword.html')
 
 @app.route('/api/changepassword', methods=['POST'])
 @token_required
 def api_change_password(current_user):
+    """API endpoint to change password."""
     data = request.get_json()
+
+    if not data:
+        return jsonify({'message': 'No data provided.'}), 400
 
     current_password = data.get('current_password')
     new_password = data.get('new_password')
@@ -541,79 +664,6 @@ def api_change_password(current_user):
     current_user.set_password(new_password)
     db.session.commit()
     return jsonify({'message': 'Password updated successfully.'}), 200
-
-# ----------------------------------------------------------------
-# Consent routes
-# ----------------------------------------------------------------
-@app.route('/consent', methods=['GET', 'POST'])
-@login_required
-def consent():
-    user = current_user
-    existing = Consent.query.filter_by(user_id=user.id).first()
-
-    purpose = Purpose.query.filter_by(purpose_name="User registration").first()
-    fiduciary = DataFiduciary.query.filter_by(name="DPDP Consultants").first()
-    if not purpose or not fiduciary:
-        flash("Setup error: Missing Purpose or Fiduciary.", "danger")
-        return redirect(url_for('dashboard'))
-
-    if existing and existing.status == "granted":
-        flash("Consent already given.", "info")
-        return redirect(url_for('dashboard'))
-
-    if request.method == 'POST':
-        consent_given = request.form.get('consent_given') == 'on'
-        if not consent_given:
-            flash("Please agree to proceed.", "warning")
-            return redirect(url_for('consent'))
-
-        if existing:
-            existing.status = "granted"
-            existing.timestamp = datetime.utcnow()
-            existing.method = "checkbox"
-        else:
-            db.session.add(Consent(
-                user_id=user.id,
-                purpose_id=purpose.id,
-                fiduciary_id=fiduciary.id,
-                status="granted",
-                method="checkbox",
-                timestamp=datetime.utcnow()
-            ))
-        db.session.commit()
-        flash("Consent recorded successfully.", "success")
-        return redirect(url_for('dashboard'))
-
-    return render_template('consent_form.html', user=user)
-
-@app.route('/api/consent', methods=['POST'])
-@token_required
-def api_consent(current_user):
-    data = request.get_json()
-    if not data or data.get('consent_given') is not True:
-        return jsonify({'status': 'error', 'message': 'Consent required.'}), 400
-
-    purpose = Purpose.query.filter_by(purpose_name="User registration").first()
-    fiduciary = DataFiduciary.query.filter_by(name="DPDP Consultants").first()
-    if not purpose or not fiduciary:
-        return jsonify({'status': 'error', 'message': 'Setup error.'}), 500
-
-    existing = Consent.query.filter_by(user_id=current_user.id).first()
-    if existing:
-        existing.status = "granted"
-        existing.timestamp = datetime.utcnow()
-        existing.method = "api"
-    else:
-        db.session.add(Consent(
-            user_id=current_user.id,
-            purpose_id=purpose.id,
-            fiduciary_id=fiduciary.id,
-            status="granted",
-            method="api",
-            timestamp=datetime.utcnow()
-        ))
-    db.session.commit()
-    return jsonify({'status': 'success', 'message': 'Consent recorded.'}), 201
 
 # ----------------------------
 # Consent Form Dynamic Renderer

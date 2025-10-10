@@ -27,7 +27,11 @@
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('profile') }}">Profile</a></li>
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('changepassword') }}">Change Password</a>
                     </li>
-                    <li class="nav-item"><a class="nav-link text-danger" href="{{ url_for('logout') }}">Logout</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('editprofile') }}">Edit Profile</a>
+                    </li>
+                    <li class="nav-item"><button class="btn btn-outline-danger"><a
+                                class="text-decoration-none text-danger"
+                                href="{{ url_for('logout') }}">Logout</a></button></li>
                 </ul>
             </div>
         </div>
