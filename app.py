@@ -426,14 +426,14 @@ def api_login():
     db.session.commit()
 
     response = {
-        'message': f"Login successfull, welcome back {user.full_name or user.email}!",
-        'token': token,
+        'message': f"Login successful, welcome back {user.fullname or user.email}!",
         'user': {
-            'user_id': user.user_id,
+            'user_id': user.id,
             'email': user.email,
-            'full_name': user.full_name,
-            'role': user.role.name if user.role else None,
-            'department': user.department.name if user.department else None
+            'fullname': user.fullname,
+            'roles': [ur.role.role_name for ur in user.roles] if user.roles else [],
+            'jwt_token': token,
+            'session_token': session_token
         }
     }
     return jsonify(response), 200
@@ -780,9 +780,10 @@ def api_consent_test():
 @app.route('/showallusers')
 @login_required
 def showallusers():
-    if session.get('user_role') != 'admin':
+    user=current_user
+    session['user_role'] = [ur.role.role_name for ur in user.roles][0] if user.roles else 'employee'
+    if session['user_role'] != 'admin':
         abort(403)
-
     page = request.args.get('page', 1, type=int)  # Get page number from query param
     per_page = 10  # Number of users per page
 
@@ -864,7 +865,9 @@ def api_showallconsents(current_user):
 @app.route('/showallcompanies')
 @login_required
 def showallcompanies():
-    if session.get('user_role') != 'admin':
+    user=current_user
+    session['user_role'] = [ur.role.role_name for ur in user.roles][0] if user.roles else 'employee'
+    if session['user_role'] != 'admin':
         abort(403)
     companies = DataFiduciary.query.order_by(DataFiduciary.company_id.desc()).all()
     return render_template('showallcompanies.html', companies=companies)
@@ -888,9 +891,10 @@ def api_show_all_companies(current_user):
 @app.route('/showallfeedbacks')
 @login_required
 def showallfeedbacks():
-    if session.get('user_role') != 'admin':
+    user=current_user
+    session['user_role'] = [ur.role.role_name for ur in user.roles][0] if user.roles else 'employee'
+    if session['user_role'] != 'admin':
         abort(403)
-
     page = request.args.get('page', 1, type=int)
     per_page = 10
 
@@ -1102,6 +1106,7 @@ from sqlalchemy.exc import IntegrityError
 @app.route('/admin/roles', methods=['GET', 'POST'])
 @login_required
 def admin_roles():
+    user = current_user
     if current_user.primary_role != 'admin':
         abort(403)
 
@@ -1123,7 +1128,7 @@ def admin_roles():
         return redirect(url_for('admin_roles'))
 
     roles = Role.query.order_by(Role.created_at.desc()).all()
-    return render_template('roles.html', roles=roles)
+    return render_template('roles.html', roles=roles, user=user)
 
 @app.route('/admin/roles/delete/<string:id>', methods=['POST'])
 @login_required
@@ -1144,6 +1149,7 @@ def delete_role(id):
 @app.route('/admin/fiduciaries', methods=['GET', 'POST'])
 @login_required
 def admin_fiduciaries():
+    user = current_user
     if current_user.primary_role != 'admin':
         abort(403)
 
@@ -1161,7 +1167,7 @@ def admin_fiduciaries():
         return redirect(url_for('admin_fiduciaries'))
 
     fiduciaries = DataFiduciary.query.order_by(DataFiduciary.created_at.desc()).all()
-    return render_template('fiduciaries.html', fiduciaries=fiduciaries)
+    return render_template('fiduciaries.html', fiduciaries=fiduciaries, user=user)
 
 @app.route('/admin/fiduciaries/delete/<string:id>', methods=['POST'])
 @login_required
@@ -1182,6 +1188,7 @@ def delete_fiduciary(id):
 @app.route('/admin/purposes', methods=['GET', 'POST'])
 @login_required
 def admin_purposes():
+    user = current_user
     if current_user.primary_role != 'admin':
         abort(403)
 
@@ -1205,7 +1212,7 @@ def admin_purposes():
 
     purposes = Purpose.query.order_by(Purpose.created_at.desc()).all()
     fiduciaries = DataFiduciary.query.all()
-    return render_template('purposes.html', purposes=purposes, fiduciaries=fiduciaries)
+    return render_template('purposes.html', purposes=purposes, fiduciaries=fiduciaries, user=user)
 
 @app.route('/admin/purposes/delete/<string:id>', methods=['POST'])
 @login_required
@@ -1226,6 +1233,7 @@ def delete_purpose(id):
 @app.route('/admin/mailtemplates', methods=['GET', 'POST'])
 @login_required
 def admin_mailtemplates():
+    user = current_user
     if current_user.primary_role != 'admin':
         abort(403)
 
@@ -1259,7 +1267,7 @@ def admin_mailtemplates():
         return redirect(url_for('admin_mailtemplates'))
 
     templates = MailMessage.query.order_by(MailMessage.updated_at.desc()).all()
-    return render_template('mailtemplates.html', templates=templates)
+    return render_template('mailtemplates.html', templates=templates, user=user)
 
 @app.route('/admin/mailtemplates/delete/<int:id>', methods=['POST'])
 @login_required
