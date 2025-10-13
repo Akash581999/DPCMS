@@ -1,3 +1,4 @@
+import uuid
 from flask import (
     Flask, jsonify, render_template, request, redirect,
     url_for, flash, session, abort
@@ -15,7 +16,7 @@ import jwt, os, secrets, random # type: ignore
 from dotenv import load_dotenv # type: ignore
 from config import Config
 from models import (
-    db, bcrypt, Users, DataFiduciary, Purpose,
+    db, bcrypt, AuditLog, CookieConsent, Grievance, GrievanceAction, MailMessage, Notification, Users, DataFiduciary, Purpose,
     Role, UserRole, Consent, Contacts, ConsentForm, ExternalConsent
 )
 from sendmail import send_email_with_otp
@@ -96,6 +97,17 @@ def has_valid_consent(user):
     consent = Consent.query.filter_by(user_id=user.id).first()
     return consent and consent.status == "granted"
 
+def send_notification(user_id, message, type="consent_update"):
+    notif = Notification(
+        user_id=user_id,
+        fiduciary_id=None,
+        type=type,
+        message=message,
+        channel="in_app",
+        status="sent"
+    )
+    db.session.add(notif)
+    db.session.commit()
 # ----------------------------------------------------------------
 # Ensure all tables are created
 # ----------------------------------------------------------------
@@ -109,7 +121,7 @@ def create_tables_if_not_exist():
     db.session.commit()
 
 # ----------------------------------------------------------------
-# Main routes (keep your existing code)
+# Main routes
 # ----------------------------------------------------------------
 @app.route('/')
 def home():
@@ -204,7 +216,6 @@ def register():
             flash(f"Failed to send OTP: {str(e)}", "danger")
             db.session.rollback()
             return redirect(url_for('register'))
-
     return render_template('register.html')
 
 @app.route('/verify-otp', methods=['GET', 'POST'])
@@ -230,7 +241,6 @@ def verify_otp():
         session['user_id_for_consent'] = user.id  # store for consent step
         flash("Email verified successfully. Please review the consent form.", "success")
         return redirect(url_for('consent'))
-
     return render_template('verify_otp.html')
 
 # ----------------------------------------------------------------
@@ -434,7 +444,7 @@ def logout():
     current_user.session_token = None
     db.session.commit()
     logout_user()
-    flash("Logged out successfully.", "info")
+    flash("You have been logged out successfully.", "info")
     return redirect(url_for('login'))
 
 @app.route('/api/logout', methods=['POST'])
@@ -498,17 +508,14 @@ def api_reset_password():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    """Main user dashboard."""
     if not has_valid_consent(current_user):
         flash("Consent missing or expired.", "warning")
         return redirect(url_for('consent'))
-
     return render_template('dashboard.html', user=current_user)
 
 @app.route('/api/dashboard', methods=['GET'])
 @token_required
 def api_dashboard(current_user):
-    """API endpoint for dashboard info."""
     if not has_valid_consent(current_user):
         return jsonify({
             'message': 'Consent required',
@@ -524,22 +531,18 @@ def api_dashboard(current_user):
 @app.route('/profile')
 @login_required
 def profile():
-    """Show logged-in user profile."""
     user = current_user
 
     if not user.is_authenticated:
         flash('Please log in to view your profile.', 'warning')
         return redirect(url_for('login'))
 
-    # Query the company where the current user is the DPO
     company = DataFiduciary.query.filter_by(dpo_id=user.id).first()
-
     return render_template('profile.html', user=user, company=company)
 
 @app.route('/api/profile', methods=['GET'])
 @token_required
 def api_profile(current_user):
-    """API endpoint for profile data."""
     if not current_user:
         return jsonify({'message': 'User not found.'}), 404
 
@@ -553,70 +556,9 @@ def api_profile(current_user):
     }
     return jsonify({'profile': profile_data}), 200
 
-@app.route('/editprofile', methods=['GET', 'POST'])
-@login_required
-def editprofile():
-    """Edit profile info (UI)."""
-    user = current_user
-    companies = DataFiduciary.query.all()
-
-    if request.method == 'POST':
-        user.fullname = request.form.get('fullname')
-        user.mobile_no = request.form.get('mobile_no')
-        user.address = request.form.get('address')
-
-        new_company_id = request.form.get('company_id')
-        if new_company_id:
-            company = DataFiduciary.query.get(new_company_id)
-            if company:
-                user.company_id = company.id
-            else:
-                flash("Selected company doesn't exist.", 'danger')
-                return render_template('editprofile.html', user=user, companies=companies)
-
-        profile_image = request.files.get('profile_image')
-        if profile_image and profile_image.filename != '':
-            filename = secure_filename(profile_image.filename)
-            upload_path = os.path.join('static/uploads', filename)
-            os.makedirs(os.path.dirname(upload_path), exist_ok=True)
-            profile_image.save(upload_path)
-            user.profile_image = filename
-
-        db.session.commit()
-        flash('Profile updated successfully!', 'success')
-        return redirect(url_for('profile'))
-
-    return render_template('editprofile.html', user=user, companies=companies)
-
-@app.route('/api/editprofile', methods=['POST'])
-@token_required
-def api_edit_profile(current_user):
-    """API endpoint to update profile."""
-    data = request.get_json()
-
-    if not data:
-        return jsonify({'message': 'No data provided'}), 400
-
-    if 'fullname' in data:
-        current_user.fullname = data['fullname']
-    if 'mobile_no' in data:
-        current_user.mobile_no = data['mobile_no']
-    if 'address' in data:
-        current_user.address = data['address']
-
-    if 'company_id' in data:
-        company = DataFiduciary.query.get(data['company_id'])
-        if not company:
-            return jsonify({'message': 'Invalid company ID.'}), 400
-        current_user.company_id = company.id
-
-    db.session.commit()
-    return jsonify({'message': 'Profile updated successfully!'}), 200
-
 @app.route('/changepassword', methods=['GET', 'POST'])
 @login_required
 def changepassword():
-    """Change password (UI)."""
     user = current_user
 
     if request.method == 'POST':
@@ -642,7 +584,6 @@ def changepassword():
 @app.route('/api/changepassword', methods=['POST'])
 @token_required
 def api_change_password(current_user):
-    """API endpoint to change password."""
     data = request.get_json()
 
     if not data:
@@ -665,9 +606,9 @@ def api_change_password(current_user):
     db.session.commit()
     return jsonify({'message': 'Password updated successfully.'}), 200
 
-# ----------------------------
-# Consent Form Dynamic Renderer
-# ----------------------------
+# -----------------------------------
+# External consent from dynamic forms in html template.
+# -----------------------------------
 from flask import Response, jsonify, request
 from flask_cors import CORS  # type: ignore
 
@@ -675,14 +616,12 @@ CORS(app)
 
 @app.route('/consentform/<int:form_id>.js')
 def consentform_js(form_id):
-    """Serve a dynamic JS script that injects a consent form."""
     form = ConsentForm.query.get(form_id)
     if not form:
         return Response("console.error('Form not found');", mimetype="application/javascript")
 
     js_fields = ""
     for field in form.fields:
-        # Normalize name (keep consistent with API expectations)
         field_name = field.label.lower().replace(" ", "")
         required_flag = "input.required = true;" if field.required else ""
 
@@ -1006,6 +945,335 @@ def api_show_all_feedbacks(current_user):
     }), 200
 
 # ----------------------------------------------------------------
+# Consent Lifecycle Management
+# ----------------------------------------------------------------
+@app.route('/consent/withdraw', methods=['POST'])
+@login_required
+def withdraw_consent():
+    consent = Consent.query.filter_by(user_id=current_user.id).first()
+    if not consent or consent.status != 'granted':
+        flash('No active consent to withdraw.', 'warning')
+        return redirect(url_for('dashboard'))
+
+    consent.status = 'withdrawn'
+    consent.timestamp = datetime.utcnow()
+    db.session.commit()
+
+    flash('Your consent has been withdrawn successfully.', 'success')
+    return redirect(url_for('dashboard'))
+
+@app.route('/consent/renew', methods=['POST'])
+@login_required
+def renew_consent():
+    consent = Consent.query.filter_by(user_id=current_user.id).first()
+    if not consent:
+        flash('No consent record found to renew.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    consent.status = 'granted'
+    consent.timestamp = datetime.utcnow()
+    consent.expiry_date = datetime.utcnow() + timedelta(days=365)
+    db.session.commit()
+
+    flash('Consent renewed successfully for another year.', 'success')
+    return redirect(url_for('dashboard'))
+
+# ----------------------------------------------------------------
+# Grievance Management (User + Admin)
+# ----------------------------------------------------------------
+@app.route('/grievance', methods=['GET', 'POST'])
+@login_required
+def grievance():
+    if request.method == 'POST':
+        category = request.form.get('category')
+        description = request.form.get('description')
+        ref_no = f"GRV-{uuid.uuid4().hex[:8].upper()}"
+
+        grievance = Grievance(
+            user_id=current_user.id,
+            category=category,
+            description=description,
+            reference_number=ref_no
+        )
+        db.session.add(grievance)
+        db.session.commit()
+
+        flash(f"Grievance submitted successfully. Reference: {ref_no}", "success")
+        return redirect(url_for('dashboard'))
+    return render_template('grievance_form.html')
+
+@app.route('/admin/grievances')
+@login_required
+def admin_grievances():
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        abort(403)
+    grievances = Grievance.query.order_by(Grievance.created_at.desc()).all()
+    return render_template('admin_grievances.html', grievances=grievances)
+
+@app.route('/admin/grievances/<string:id>/resolve', methods=['POST'])
+@login_required
+def resolve_grievance(id):
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        abort(403)
+
+    grievance = Grievance.query.get_or_404(id)
+    grievance.status = 'resolved'
+    db.session.add(GrievanceAction(
+        grievance_id=id,
+        action_taken_by=current_user.id,
+        description='Resolved by admin'
+    ))
+    db.session.commit()
+    flash('Grievance marked as resolved.', 'success')
+    return redirect(url_for('admin_grievances'))
+
+# ----------------------------------------------------------------
+# Consent and grievance notifications
+# ----------------------------------------------------------------
+# def send_notification(user_id, message, type="consent_update"):
+#     notif = Notification(
+#         user_id=user_id,
+#         fiduciary_id=None,
+#         type=type,
+#         message=message,
+#         channel="in_app",
+#         status="sent"
+#     )
+#     db.session.add(notif)
+#     db.session.commit()
+
+# send_notification(current_user.id, "Your consent was successfully granted.")
+
+# ----------------------------------------------------------------
+# Cookie Consent APIs
+# ----------------------------------------------------------------
+@app.route('/api/cookies', methods=['POST'])
+@token_required
+def api_set_cookie_consent(current_user):
+    data = request.get_json()
+    category = data.get('category')
+    status = data.get('status', 'granted')
+
+    existing = CookieConsent.query.filter_by(user_id=current_user.id, category=category).first()
+    if existing:
+        existing.status = status
+        existing.timestamp = datetime.utcnow()
+    else:
+        db.session.add(CookieConsent(
+            user_id=current_user.id,
+            category=category,
+            status=status,
+            timestamp=datetime.utcnow()
+        ))
+    db.session.commit()
+    return jsonify({'message': 'Cookie consent updated.'}), 200
+
+# ----------------------------------------------------------------
+# Admin Reporting / Audit Logs
+# ----------------------------------------------------------------
+@app.route('/admin/auditlogs')
+@login_required
+def view_audit_logs():
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        abort(403)
+    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(100).all()
+    return render_template('audit_logs.html', logs=logs)
+
+# ----------------------------------------------------------------
+# External Consent Viewing (Admin)
+# ----------------------------------------------------------------
+@app.route('/admin/externalconsents')
+@login_required
+def view_external_consents():
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        abort(403)
+    consents = ExternalConsent.query.order_by(ExternalConsent.submitted_at.desc()).all()
+    return render_template('external_consents.html', consents=consents)
+
+
+# ----------------------------------------------------------------
+# ADMIN CRUD MANAGEMENT ROUTES
+# ----------------------------------------------------------------
+from sqlalchemy.exc import IntegrityError
+
+# ----------------------------
+# 1️⃣ ROLE MANAGEMENT
+# ----------------------------
+@app.route('/admin/roles', methods=['GET', 'POST'])
+@login_required
+def admin_roles():
+    if current_user.primary_role != 'admin':
+        abort(403)
+
+    if request.method == 'POST':
+        role_name = request.form.get('role_name')
+        description = request.form.get('description')
+
+        if not role_name:
+            flash('Role name is required.', 'warning')
+            return redirect(url_for('admin_roles'))
+
+        try:
+            db.session.add(Role(role_name=role_name.strip(), description=description))
+            db.session.commit()
+            flash('Role created successfully.', 'success')
+        except IntegrityError:
+            db.session.rollback()
+            flash('Role name already exists.', 'danger')
+        return redirect(url_for('admin_roles'))
+
+    roles = Role.query.order_by(Role.created_at.desc()).all()
+    return render_template('admin/roles.html', roles=roles)
+
+@app.route('/admin/roles/delete/<string:id>', methods=['POST'])
+@login_required
+def delete_role(id):
+    if current_user.primary_role != 'admin':
+        abort(403)
+
+    role = Role.query.get_or_404(id)
+    db.session.delete(role)
+    db.session.commit()
+    flash('Role deleted successfully.', 'success')
+    return redirect(url_for('admin_roles'))
+
+
+# ----------------------------
+# 2️⃣ DATA FIDUCIARIES MANAGEMENT
+# ----------------------------
+@app.route('/admin/fiduciaries', methods=['GET', 'POST'])
+@login_required
+def admin_fiduciaries():
+    if current_user.primary_role != 'admin':
+        abort(403)
+
+    if request.method == 'POST':
+        name = request.form.get('name')
+        email = request.form.get('contact_email')
+
+        if not all([name, email]):
+            flash('Both name and contact email are required.', 'warning')
+            return redirect(url_for('admin_fiduciaries'))
+
+        db.session.add(DataFiduciary(name=name.strip(), contact_email=email.strip()))
+        db.session.commit()
+        flash('Data Fiduciary added successfully.', 'success')
+        return redirect(url_for('admin_fiduciaries'))
+
+    fiduciaries = DataFiduciary.query.order_by(DataFiduciary.created_at.desc()).all()
+    return render_template('admin/fiduciaries.html', fiduciaries=fiduciaries)
+
+@app.route('/admin/fiduciaries/delete/<string:id>', methods=['POST'])
+@login_required
+def delete_fiduciary(id):
+    if current_user.primary_role != 'admin':
+        abort(403)
+
+    fid = DataFiduciary.query.get_or_404(id)
+    db.session.delete(fid)
+    db.session.commit()
+    flash('Data Fiduciary deleted successfully.', 'success')
+    return redirect(url_for('admin_fiduciaries'))
+
+
+# ----------------------------
+# 3️⃣ PURPOSE MANAGEMENT
+# ----------------------------
+@app.route('/admin/purposes', methods=['GET', 'POST'])
+@login_required
+def admin_purposes():
+    if current_user.primary_role != 'admin':
+        abort(403)
+
+    if request.method == 'POST':
+        purpose_name = request.form.get('purpose_name')
+        description = request.form.get('description')
+        fid_id = request.form.get('fiduciary_id')
+
+        if not all([purpose_name, fid_id]):
+            flash('Purpose name and fiduciary are required.', 'warning')
+            return redirect(url_for('admin_purposes'))
+
+        db.session.add(Purpose(
+            purpose_name=purpose_name.strip(),
+            description=description,
+            fiduciary_id=fid_id
+        ))
+        db.session.commit()
+        flash('Purpose created successfully.', 'success')
+        return redirect(url_for('admin_purposes'))
+
+    purposes = Purpose.query.order_by(Purpose.created_at.desc()).all()
+    fiduciaries = DataFiduciary.query.all()
+    return render_template('admin/purposes.html', purposes=purposes, fiduciaries=fiduciaries)
+
+@app.route('/admin/purposes/delete/<string:id>', methods=['POST'])
+@login_required
+def delete_purpose(id):
+    if current_user.primary_role != 'admin':
+        abort(403)
+
+    purpose = Purpose.query.get_or_404(id)
+    db.session.delete(purpose)
+    db.session.commit()
+    flash('Purpose deleted successfully.', 'success')
+    return redirect(url_for('admin_purposes'))
+
+
+# ----------------------------
+# 4️⃣ MAIL TEMPLATE MANAGEMENT
+# ----------------------------
+@app.route('/admin/mailtemplates', methods=['GET', 'POST'])
+@login_required
+def admin_mailtemplates():
+    if current_user.primary_role != 'admin':
+        abort(403)
+
+    if request.method == 'POST':
+        template_type = request.form.get('template_type')
+        subject = request.form.get('subject')
+        body = request.form.get('body')
+        link_url = request.form.get('link_url')
+
+        if not all([template_type, subject, body]):
+            flash('Template type, subject, and body are required.', 'warning')
+            return redirect(url_for('admin_mailtemplates'))
+
+        existing = MailMessage.query.filter_by(template_type=template_type).first()
+        if existing:
+            existing.subject = subject
+            existing.body = body
+            existing.link_url = link_url
+            existing.updated_at = datetime.utcnow()
+            flash('Template updated successfully.', 'info')
+        else:
+            db.session.add(MailMessage(
+                template_type=template_type,
+                subject=subject,
+                body=body,
+                link_url=link_url
+            ))
+            flash('New template added.', 'success')
+
+        db.session.commit()
+        return redirect(url_for('admin_mailtemplates'))
+
+    templates = MailMessage.query.order_by(MailMessage.updated_at.desc()).all()
+    return render_template('admin/mailtemplates.html', templates=templates)
+
+@app.route('/admin/mailtemplates/delete/<int:id>', methods=['POST'])
+@login_required
+def delete_mailtemplate(id):
+    if current_user.primary_role != 'admin':
+        abort(403)
+
+    template = MailMessage.query.get_or_404(id)
+    db.session.delete(template)
+    db.session.commit()
+    flash('Mail template deleted.', 'success')
+    return redirect(url_for('admin_mailtemplates'))
+
+# ----------------------------------------------------------------
 # Run app
 # ----------------------------------------------------------------
 if __name__ == '__main__':
@@ -1024,10 +1292,10 @@ if __name__ == '__main__':
             print("✅ Default Data Fiduciary created.")
 
         fid = DataFiduciary.query.filter_by(name='DPDP Consultants').first()
-        if fid and not Purpose.query.filter_by(purpose_name='User registration').first():
+        if fid and not Purpose.query.filter_by(purpose_name='New user registration').first():
             db.session.add(Purpose(
-                purpose_name='User registration',
-                description='Default purpose for user registration',
+                purpose_name='New user registration',
+                description='Default purpose for new user registration',
                 fiduciary_id=fid.id
             ))
             db.session.commit()
