@@ -1123,7 +1123,7 @@ def admin_roles():
         return redirect(url_for('admin_roles'))
 
     roles = Role.query.order_by(Role.created_at.desc()).all()
-    return render_template('admin/roles.html', roles=roles)
+    return render_template('roles.html', roles=roles)
 
 @app.route('/admin/roles/delete/<string:id>', methods=['POST'])
 @login_required
@@ -1161,7 +1161,7 @@ def admin_fiduciaries():
         return redirect(url_for('admin_fiduciaries'))
 
     fiduciaries = DataFiduciary.query.order_by(DataFiduciary.created_at.desc()).all()
-    return render_template('admin/fiduciaries.html', fiduciaries=fiduciaries)
+    return render_template('fiduciaries.html', fiduciaries=fiduciaries)
 
 @app.route('/admin/fiduciaries/delete/<string:id>', methods=['POST'])
 @login_required
@@ -1205,7 +1205,7 @@ def admin_purposes():
 
     purposes = Purpose.query.order_by(Purpose.created_at.desc()).all()
     fiduciaries = DataFiduciary.query.all()
-    return render_template('admin/purposes.html', purposes=purposes, fiduciaries=fiduciaries)
+    return render_template('purposes.html', purposes=purposes, fiduciaries=fiduciaries)
 
 @app.route('/admin/purposes/delete/<string:id>', methods=['POST'])
 @login_required
@@ -1259,7 +1259,7 @@ def admin_mailtemplates():
         return redirect(url_for('admin_mailtemplates'))
 
     templates = MailMessage.query.order_by(MailMessage.updated_at.desc()).all()
-    return render_template('admin/mailtemplates.html', templates=templates)
+    return render_template('mailtemplates.html', templates=templates)
 
 @app.route('/admin/mailtemplates/delete/<int:id>', methods=['POST'])
 @login_required

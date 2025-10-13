@@ -1,0 +1,39 @@
+{% extends "dashboard.html" %}
+{% block content %}
+<div class="container mt-5 pt-4">
+    <h3 class="text-primary">Manage Mail Templates</h3>
+    <form method="POST" class="mt-3 mb-4">
+        <input name="template_type" placeholder="Template Type (e.g. otp_email)" class="form-control mb-2" required>
+        <input name="subject" placeholder="Subject" class="form-control mb-2" required>
+        <textarea name="body" class="form-control mb-2" rows="4" placeholder="Email Body"></textarea>
+        <input name="link_url" placeholder="Optional Link URL" class="form-control mb-2">
+        <button type="submit" class="btn btn-primary">Save Template</button>
+    </form>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Type</th>
+                <th>Subject</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in templates %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ t.template_type }}</td>
+                <td>{{ t.subject }}</td>
+                <td>
+                    <form action="{{ url_for('delete_mailtemplate', id=t.id) }}" method="POST" class="d-inline">
+                        <button class="btn btn-sm btn-danger"
+                            onclick="return confirm('Delete this template?')">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

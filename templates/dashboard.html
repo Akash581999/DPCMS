@@ -61,9 +61,11 @@
 
             <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
                 <a href="{{ url_for('showallconsents') }}" class="btn btn-outline-primary">View All Consents</a>
-                <a href="{{ url_for('contacts') }}" class="btn btn-outline-success">View Feedbacks</a>
-                <a href="#" class="btn btn-outline-info">Manage Users</a>
-                <a href="#" class="btn btn-outline-warning">Manage Roles</a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-success">View Feedbacks</a>
+                <a href="{{ url_for('admin_roles') }}" class="btn btn-outline-warning">Manage Roles</a>
+                <a href="{{ url_for('admin_fiduciaries') }}" class="btn btn-outline-info">Manage Fiduciaries</a>
+                <a href="{{ url_for('admin_purposes') }}" class="btn btn-outline-secondary">Manage Purposes</a>
+                <a href="{{ url_for('admin_mailtemplates') }}" class="btn btn-outline-dark">Mail Templates</a>
             </div>
         </div>
 
@@ -74,7 +76,7 @@
             <p>Welcome to your personalized DPCMS dashboard.</p>
 
             <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
-                <a href="{{ url_for('contacts') }}" class="btn btn-outline-info">Give Feedback</a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-info">Give Feedback</a>
                 <a href="{{ url_for('dashboard') }}" class="btn btn-outline-dark">My Feedbacks</a>
                 <a href="{{ url_for('profile') }}" class="btn btn-outline-secondary">My Profile</a>
             </div>
