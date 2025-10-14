@@ -35,19 +35,18 @@
                     <th>Rating</th>
                     <th>Sent On</th>
                     <th>Status</th>
-                    <th>Action</th>
                 </tr>
             </thead>
             <tbody>
                 {% for contact in contacts %}
                 <tr>
                     <td>{{ contact.id }}</td>
-                    <td>{{ contact.fullname }}</td>
-                    <td>{{ contact.email }}</td>
-                    <td>{{ contact.mobile_no }}</td>
-                    <td>{{ contact.message }}</td>
+                    <td>{{ contact.fullname or '-' }}</td>
+                    <td>{{ contact.email or '-' }}</td>
+                    <td>{{ contact.mobile_no or '-' }}</td>
+                    <td>{{ contact.message or '-' }}</td>
                     <td>{{ contact.rating or '-' }}</td>
-                    <td>{{ contact.sent_on.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ contact.sent_on.strftime('%Y-%m-%d %H:%M') if contact.sent_on else '-' }}</td>
                     <td>
                         {% if contact.read_status.value == 'Read' %}
                         <span class="badge bg-success">Read</span>
@@ -57,25 +56,11 @@
                         <span class="badge bg-warning">Unknown</span>
                         {% endif %}
                     </td>
-                    <td>
-                        {% if contact.read_status.value == 'Unread' %}
-                        <form action="{{ url_for('mark_contact_as_read', contact_id=contact.id) }}" method="post"
-                            style="display:inline;">
-                            <button class="btn btn-success btn-sm">Read</button>
-                        </form>
-                        {% elif contact.read_status.value == 'Read' %}
-                        <form action="{{ url_for('mark_contact_as_unread', contact_id=contact.id) }}" method="post"
-                            style="display:inline;">
-                            <button class="btn btn-secondary btn-sm">Unread</button>
-                        </form>
-                        {% else %}
-                        <em>No actions</em>
-                        {% endif %}
-                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+
         <!-- Pagination Controls -->
         <nav aria-label="Contacts pagination">
             <ul class="pagination justify-content-center mt-4">
@@ -94,8 +79,9 @@
                 {% if page_num == pagination.page %}
                 <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
                 {% else %}
-                <li class="page-item"><a class="page-link" href="{{ url_for('showallfeedbacks', page=page_num) }}">{{
-                        page_num }}</a></li>
+                <li class="page-item">
+                    <a class="page-link" href="{{ url_for('showallfeedbacks', page=page_num) }}">{{ page_num }}</a>
+                </li>
                 {% endif %}
                 {% else %}
                 <li class="page-item disabled"><span class="page-link">…</span></li>
@@ -116,9 +102,11 @@
         {% else %}
         <p>No contact messages yet.</p>
         {% endif %}
+
         <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Back</a>
-        <a href="{{ url_for('uploadcontactscsv') }}" class="btn btn-success">Upload Contacts CSV</a>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

@@ -780,50 +780,56 @@ def api_consent_test():
 @app.route('/showallusers')
 @login_required
 def showallusers():
-    user=current_user
+    user = current_user
+
+    # Save user role in session
     session['user_role'] = [ur.role.role_name for ur in user.roles][0] if user.roles else 'employee'
     if session['user_role'] != 'admin':
         abort(403)
-    page = request.args.get('page', 1, type=int)  # Get page number from query param
-    per_page = 10  # Number of users per page
 
-    users = Users.query.join(Role).filter(Role.name != 'admin') \
-        .order_by(Users.user_id.desc()) \
-        .paginate(page=page, per_page=per_page)
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
 
-    roles = Role.query.filter(Role.name != 'admin').all()
+    # 🧠 Updated query: Use Users directly and exclude admin roles properly
+    users_query = Users.query.join(UserRole).join(Role).filter(Role.role_name != 'admin')
+    users = users_query.order_by(Users.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
+
+    roles = Role.query.filter(Role.role_name != 'admin').all()
     return render_template('showallusers.html', users=users, roles=roles)
 
 @app.route('/api/showallusers', methods=['GET'])
 @token_required
 def api_show_all_users(current_user):
-    if current_user.role.name != 'admin':
+    # Ensure current_user is admin
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
         return jsonify({'message': 'Forbidden – Admins only'}), 403
 
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
 
-    # Paginate the user query
-    users_pagination = Users.query.join(Role).filter(Role.name != 'admin') \
-        .order_by(Users.user_id.desc()) \
-        .paginate(page=page, per_page=per_page, error_out=False)
+    # 🧠 Query all non-admin users
+    users_query = Users.query.join(UserRole).join(Role).filter(Role.role_name != 'admin')
+    users_pagination = users_query.order_by(Users.id.desc()).paginate(page=page, per_page=per_page, error_out=False)
 
-    # Get role data (all at once, not paginated)
-    roles = Role.query.filter(Role.name != 'admin').all()
-    role_data = [role.name for role in roles]
+    # 🧠 Get all available roles except admin
+    roles = Role.query.filter(Role.role_name != 'admin').all()
+    role_data = [role.role_name for role in roles]
 
+    # 🧠 Format user data for API response
     user_data = []
     for user in users_pagination.items:
         user_data.append({
-            'user_id': user.user_id,
+            'id': user.id,
+            'fullname': user.fullname,
             'email': user.email,
-            'full_name': user.full_name,
-            'role': user.role.name if user.role else None,
-            'department': user.department.name if user.department else None,
-            'is_active': user.is_active
+            'mobile_no': user.mobile_no,
+            'roles': [ur.role.role_name for ur in user.roles] if user.roles else [],
+            'is_active': user.is_active,
+            'created_at': user.created_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(user, 'created_at') and user.created_at else None
         })
 
     return jsonify({
+        'status': 'success',
         'users': user_data,
         'roles': role_data,
         'pagination': {
@@ -861,32 +867,6 @@ def api_showallconsents(current_user):
             } for c in consents
         ]
     }), 200
-
-@app.route('/showallcompanies')
-@login_required
-def showallcompanies():
-    user=current_user
-    session['user_role'] = [ur.role.role_name for ur in user.roles][0] if user.roles else 'employee'
-    if session['user_role'] != 'admin':
-        abort(403)
-    companies = DataFiduciary.query.order_by(DataFiduciary.company_id.desc()).all()
-    return render_template('showallcompanies.html', companies=companies)
-
-@app.route('/api/showallcompanies', methods=['GET'])
-@token_required
-def api_show_all_companies(current_user):
-    if current_user.role.name != 'admin':
-        return jsonify({'message': 'Forbidden – Admins only'}), 403
-
-    companies = DataFiduciary.query.order_by(DataFiduciary.company_id.desc()).all()
-    company_data = []
-    for company in companies:
-        company_data.append({
-            'company_id': company.company_id,
-            'name': company.name,
-            'address': company.address
-        })
-    return jsonify({'companies': company_data}), 200
 
 @app.route('/showallfeedbacks')
 @login_required
@@ -947,6 +927,32 @@ def api_show_all_feedbacks(current_user):
             'prev_page': pagination.prev_num
         }
     }), 200
+
+@app.route('/showallcompanies')
+@login_required
+def showallcompanies():
+    user=current_user
+    session['user_role'] = [ur.role.role_name for ur in user.roles][0] if user.roles else 'employee'
+    if session['user_role'] != 'admin':
+        abort(403)
+    companies = DataFiduciary.query.order_by(DataFiduciary.company_id.desc()).all()
+    return render_template('showallcompanies.html', companies=companies)
+
+@app.route('/api/showallcompanies', methods=['GET'])
+@token_required
+def api_show_all_companies(current_user):
+    if current_user.role.name != 'admin':
+        return jsonify({'message': 'Forbidden – Admins only'}), 403
+
+    companies = DataFiduciary.query.order_by(DataFiduciary.company_id.desc()).all()
+    company_data = []
+    for company in companies:
+        company_data.append({
+            'company_id': company.company_id,
+            'name': company.name,
+            'address': company.address
+        })
+    return jsonify({'companies': company_data}), 200
 
 # ----------------------------------------------------------------
 # Consent Lifecycle Management

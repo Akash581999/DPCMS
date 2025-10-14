@@ -4,15 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
-        integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
-        crossorigin="anonymous"></script>
-    <title>Show All Consents</title>
+    <title>All Consents</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 
-<body>
+<body class="bg-light">
     <div class="container mt-5">
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -25,35 +21,71 @@
         {% endif %}
         {% endwith %}
 
-        <h2 class="mb-4">Show All Consents</h2>
+        <h2 class="mb-4 text-center">📜 All Consents</h2>
 
         {% if consents %}
-        <table class="table table-bordered table-hover">
-            <thead class="table-light">
+        <table class="table table-striped table-hover align-middle">
+            <thead class="table-dark">
                 <tr>
-                    <th>consent Id</th>
-                    <th>User Id</th>
-                    <th>Data Collected</th>
-                    <th>Consent Given</th>
+                    <th scope="col">Consent ID</th>
+                    <th scope="col">Full Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Purpose</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Method</th>
+                    <th scope="col">Timestamp</th>
                 </tr>
             </thead>
             <tbody>
                 {% for consent in consents %}
                 <tr>
-                    <td>{{ consent.consent_id }}</td>
-                    <td>{{ consent.user_id }}</td>
-                    <td>{{ consent.data_collected }}</td>
-                    <td>{{ consent.consent_given or '-' }}</td>
+                    <!-- Handle both Consent and ExternalConsent -->
+                    <td>{{ consent.id }}</td>
+                    <td>
+                        {% if consent.fullname %}
+                        {{ consent.fullname }}
+                        {% else %}
+                        User ID: {{ consent.user_id }}
+                        {% endif %}
+                    </td>
+                    <td>{{ consent.email or '-' }}</td>
+                    <td>
+                        {% if consent.form_id %}
+                        External Form #{{ consent.form_id }}
+                        {% else %}
+                        Purpose ID: {{ consent.purpose_id }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if consent.status %}
+                        {{ consent.status|capitalize }}
+                        {% elif consent.consent_given %}
+                        Granted
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>{{ consent.method or 'Form' }}</td>
+                    <td>
+                        {% if consent.timestamp %}
+                        {{ consent.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
+                        {% elif consent.submitted_at %}
+                        {{ consent.submitted_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
         {% else %}
-        <p>No jobs posted yet.</p>
+        <div class="alert alert-info text-center">No consents found.</div>
         {% endif %}
-
         <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Back</a>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>
