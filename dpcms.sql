@@ -1,3 +1,4 @@
+-- Active: 1754917199359@@127.0.0.1@5432@DPCMS
 SELECT * FROM public.users;
 
 SELECT * FROM public.data_fiduciaries;

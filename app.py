@@ -1106,48 +1106,123 @@ def view_external_consents():
 # ----------------------------------------------------------------
 from sqlalchemy.exc import IntegrityError
 
-# ----------------------------
-# 1️⃣ ROLE MANAGEMENT
-# ----------------------------
+# ---------------------------------------------------------------------
+# 1️⃣ ROLE MANAGEMENT (Admin - Web Interface)
+# ---------------------------------------------------------------------
 @app.route('/admin/roles', methods=['GET', 'POST'])
 @login_required
 def admin_roles():
+    """Admin: Manage user roles (view + add)."""
     user = current_user
-    if current_user.primary_role != 'admin':
+    roles = Role.query.order_by(Role.created_at.desc()).all()
+    if not user or user.primary_role != 'admin':
         abort(403)
 
     if request.method == 'POST':
-        role_name = request.form.get('role_name')
-        description = request.form.get('description')
+        role_name = request.form.get('role_name', '').strip()
+        description = request.form.get('description', '').strip()
 
         if not role_name:
             flash('Role name is required.', 'warning')
             return redirect(url_for('admin_roles'))
 
+        existing_role = Role.query.filter(db.func.lower(Role.role_name) == role_name.lower()).first()
+        if existing_role:
+            flash('Role name already exists.', 'danger')
+            return redirect(url_for('admin_roles'))
+
         try:
-            db.session.add(Role(role_name=role_name.strip(), description=description))
+            new_role = Role(role_name=role_name, description=description)
+            db.session.add(new_role)
             db.session.commit()
-            flash('Role created successfully.', 'success')
+            flash(f'Role "{role_name}" created successfully.', 'success')
         except IntegrityError:
             db.session.rollback()
-            flash('Role name already exists.', 'danger')
-        return redirect(url_for('admin_roles'))
+            flash('Database integrity error while creating role.', 'danger')
 
-    roles = Role.query.order_by(Role.created_at.desc()).all()
+        return redirect(url_for('admin_roles'))
     return render_template('roles.html', roles=roles, user=user)
 
 @app.route('/admin/roles/delete/<string:id>', methods=['POST'])
 @login_required
 def delete_role(id):
-    if current_user.primary_role != 'admin':
+    """Admin: Delete a role by ID."""
+    if not current_user or current_user.primary_role != 'admin':
         abort(403)
 
     role = Role.query.get_or_404(id)
+
+    # Prevent deleting a role assigned to users
+    assigned_users = UserRole.query.filter_by(role_id=role.id).count()
+    if assigned_users > 0:
+        flash('Cannot delete a role that is currently assigned to users.', 'warning')
+        return redirect(url_for('admin_roles'))
+
     db.session.delete(role)
     db.session.commit()
-    flash('Role deleted successfully.', 'success')
+    flash(f'Role "{role.role_name}" deleted successfully.', 'success')
     return redirect(url_for('admin_roles'))
 
+@app.route('/api/admin/roles', methods=['GET', 'POST'])
+@login_required
+def api_admin_roles():
+    """API endpoint for admin role management."""
+    if not current_user or current_user.primary_role != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        role_name = data.get('role_name', '').strip()
+        description = data.get('description', '').strip()
+
+        if not role_name:
+            return jsonify({'error': 'Role name is required.'}), 400
+
+        existing_role = Role.query.filter(db.func.lower(Role.role_name) == role_name.lower()).first()
+        if existing_role:
+            return jsonify({'error': 'Role already exists.'}), 409
+
+        try:
+            new_role = Role(role_name=role_name, description=description)
+            db.session.add(new_role)
+            db.session.commit()
+            return jsonify({
+                'message': 'Role created successfully.',
+                'role': {
+                    'id': new_role.id,
+                    'role_name': new_role.role_name,
+                    'description': new_role.description,
+                    'created_at': new_role.created_at
+                }
+            }), 201
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({'error': 'Database integrity error.'}), 500
+
+    # GET all roles
+    roles = Role.query.order_by(Role.created_at.desc()).all()
+    return jsonify([{
+        'id': role.id,
+        'role_name': role.role_name,
+        'description': role.description,
+        'created_at': role.created_at
+    } for role in roles]), 200
+
+@app.route('/api/admin/roles/<string:id>', methods=['DELETE'])
+@login_required
+def api_delete_role(id):
+    """API endpoint to delete a role (admin only)."""
+    if not current_user or current_user.primary_role != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    role = Role.query.get_or_404(id)
+    assigned_users = UserRole.query.filter_by(role_id=role.id).count()
+    if assigned_users > 0:
+        return jsonify({'error': 'Cannot delete a role assigned to users.'}), 400
+
+    db.session.delete(role)
+    db.session.commit()
+    return jsonify({'message': f'Role "{role.role_name}" deleted successfully.'}), 200
 
 # ----------------------------
 # 2️⃣ DATA FIDUCIARIES MANAGEMENT
