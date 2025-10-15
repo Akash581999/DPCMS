@@ -384,6 +384,7 @@ def login():
 
         login_user(user, remember=remember)
         session['jwt_token'] = token
+        print(token)
 
         if not has_valid_consent(user):
             flash("Consent required to continue.", "info")
@@ -1253,7 +1254,7 @@ def grievance():
         db.session.add(grievance)
         db.session.commit()
 
-        # ✅ Notify user
+        # ✅ Notify the user
         send_notification(
             current_user.id,
             message=f"Your grievance has been submitted successfully. Reference Number: {ref_no}",
@@ -1261,11 +1262,76 @@ def grievance():
             subject="Grievance Submitted"
         )
 
+        # ✅ Notify all admins
+        admin_users = Users.query.join(UserRole).join(Role).filter(Role.role_name == 'admin').all()
+        for admin in admin_users:
+            send_notification(
+                admin.id,
+                message=(
+                    f"A new grievance has been submitted by {current_user.fullname} "
+                    f"(User ID: {current_user.id})\n\n"
+                    f"Reference: {ref_no}\nCategory: {category}\n\nDescription:\n{description}"
+                ),
+                type="grievance_alert",
+                subject="New Grievance Submitted"
+            )
+
         flash(f"Grievance submitted successfully. Reference: {ref_no}", "success")
         return redirect(url_for('dashboard'))
 
     return render_template('grievance_form.html')
 
+@app.route('/api/grievances', methods=['POST'])
+@token_required
+def api_create_grievance():
+    data = request.get_json()
+    category = data.get('category')
+    description = data.get('description')
+
+    if not category or not description:
+        return jsonify({"error": "Both 'category' and 'description' are required."}), 400
+
+    ref_no = f"GRV-{uuid.uuid4().hex[:8].upper()}"
+
+    grievance = Grievance(
+        user_id=current_user.id,
+        category=category,
+        description=description,
+        reference_number=ref_no,
+        status="pending",
+        created_at=datetime.utcnow()
+    )
+    db.session.add(grievance)
+    db.session.commit()
+
+    # ✅ Notify the user
+    send_notification(
+        current_user.id,
+        message=f"Your grievance has been submitted successfully. Reference Number: {ref_no}",
+        type="grievance_update",
+        subject="Grievance Submitted"
+    )
+
+    # ✅ Notify all admins
+    admin_users = Users.query.join(UserRole).join(Role).filter(Role.role_name == 'admin').all()
+    for admin in admin_users:
+        send_notification(
+            admin.id,
+            message=(
+                f"A new grievance has been submitted by {current_user.fullname} "
+                f"(User ID: {current_user.id})\n\n"
+                f"Reference: {ref_no}\nCategory: {category}\n\nDescription:\n{description}"
+            ),
+            type="grievance_alert",
+            subject="New Grievance Submitted"
+        )
+
+    return jsonify({
+        "message": "Grievance submitted successfully.",
+        "reference_number": ref_no,
+        "category": category,
+        "description": description
+    }), 201
 
 @app.route('/admin/grievances')
 @login_required
@@ -1275,6 +1341,34 @@ def admin_grievances():
     grievances = Grievance.query.order_by(Grievance.created_at.desc()).all()
     return render_template('admin_grievances.html', grievances=grievances)
 
+@app.route('/api/admin/grievances', methods=['GET'])
+@token_required
+def api_admin_grievances():
+    """API: Get all grievances (admin only)."""
+    # Ensure only admin can access
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        return jsonify({"error": "Access denied. Admins only."}), 403
+
+    grievances = Grievance.query.order_by(Grievance.created_at.desc()).all()
+
+    grievances_list = [
+        {
+            "id": g.id,
+            "reference_number": g.reference_number,
+            "user_id": g.user_id,
+            "user_name": g.user.fullname if g.user else None,
+            "category": g.category,
+            "description": g.description,
+            "status": g.status,
+            "created_at": g.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        for g in grievances
+    ]
+
+    return jsonify({
+        "total": len(grievances_list),
+        "grievances": grievances_list
+    }), 200
 
 @app.route('/admin/grievances/<string:id>/resolve', methods=['POST'])
 @login_required
@@ -1291,7 +1385,7 @@ def resolve_grievance(id):
     ))
     db.session.commit()
 
-    # ✅ Notify user
+    # ✅ Notify user about resolution
     send_notification(
         grievance.user_id,
         message=f"Your grievance (Ref: {grievance.reference_number}) has been resolved by the admin.",
@@ -1301,6 +1395,42 @@ def resolve_grievance(id):
 
     flash('Grievance marked as resolved.', 'success')
     return redirect(url_for('admin_grievances'))
+
+@app.route('/api/admin/grievances/<string:id>/resolve', methods=['PATCH'])
+@token_required
+def api_resolve_grievance(id):
+    """API: Resolve a grievance (admin only)."""
+    # Only admin can resolve grievances
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        return jsonify({"error": "Access denied. Admins only."}), 403
+
+    grievance = Grievance.query.get_or_404(id)
+
+    if grievance.status == 'resolved':
+        return jsonify({"message": "Grievance already resolved."}), 200
+
+    grievance.status = 'resolved'
+    db.session.add(GrievanceAction(
+        grievance_id=id,
+        action_taken_by=current_user.id,
+        description='Resolved by admin via API'
+    ))
+    db.session.commit()
+
+    # ✅ Notify the user
+    send_notification(
+        grievance.user_id,
+        message=f"Your grievance (Ref: {grievance.reference_number}) has been resolved by the admin.",
+        type="grievance_update",
+        subject="Grievance Resolved"
+    )
+
+    return jsonify({
+        "message": "Grievance marked as resolved successfully.",
+        "grievance_id": grievance.id,
+        "reference_number": grievance.reference_number,
+        "status": grievance.status
+    }), 200
 
 # ----------------------------------------------------------------
 # Cookie Consent APIs
