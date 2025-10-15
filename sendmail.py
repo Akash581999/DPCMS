@@ -113,16 +113,46 @@ def send_email_with_contacts_csv(recipient_email, fullname="User", csv_filepath=
 # ----------------------------------------------------------------
 # Consent and grievance notifications
 # ----------------------------------------------------------------
-# def send_notification(user_id, message, type="consent_update"):
-#     notif = Notification(
-#         user_id=user_id,
-#         fiduciary_id=None,
-#         type=type,
-#         message=message,
-#         channel="in_app",
-#         status="sent"
-#     )
-#     db.session.add(notif)
-#     db.session.commit()
-#     print(f"Notification sent to user {user_id}: {message}")
-# send_notification(current_user.id, "Your consent was successfully granted.")
+from datetime import datetime
+from models import Notification, Users, db
+
+def send_notification(user_id, message, type="consent_update", subject=None):
+    """Send an in-app + email notification to a user."""
+    user = Users.query.get(user_id)
+    if not user:
+        print(f"⚠️ No user found with ID {user_id}")
+        return
+
+    # Save in DB
+    notif = Notification(
+        user_id=user_id,
+        fiduciary_id=None,
+        type=type,
+        message=message,
+        channel="email+in_app",
+        status="sent",
+        created_at=datetime.utcnow()
+    )
+    db.session.add(notif)
+    db.session.commit()
+
+    # Send email
+    sender_email = os.getenv("SENDER_EMAIL")
+    app_password = os.getenv("APP_PASSWORD")
+    if not sender_email or not app_password:
+        print("⚠️ Email credentials not set, skipping email notification.")
+        return
+
+    msg = EmailMessage()
+    msg["From"] = sender_email
+    msg["To"] = user.email
+    msg["Subject"] = subject or "Notification from Data Fiduciary Portal"
+    msg.set_content(f"Hello {user.fullname},\n\n{message}\n\nBest regards,\nData Fiduciary Team")
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(sender_email, app_password)
+            smtp.send_message(msg)
+        print(f"✅ Notification sent to {user.email}")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")

@@ -1182,6 +1182,8 @@ def delete_mailtemplate(id):
 # ----------------------------------------------------------------
 # Consent Lifecycle Management
 # ----------------------------------------------------------------
+from sendmail import send_notification
+
 @app.route('/consent/withdraw', methods=['POST'])
 @login_required
 def withdraw_consent():
@@ -1194,8 +1196,17 @@ def withdraw_consent():
     consent.timestamp = datetime.utcnow()
     db.session.commit()
 
+    # ✅ Notify user
+    send_notification(
+        current_user.id,
+        message="Your consent has been successfully withdrawn.",
+        type="consent_update",
+        subject="Consent Withdrawn Confirmation"
+    )
+
     flash('Your consent has been withdrawn successfully.', 'success')
     return redirect(url_for('dashboard'))
+
 
 @app.route('/consent/renew', methods=['POST'])
 @login_required
@@ -1210,8 +1221,17 @@ def renew_consent():
     consent.expiry_date = datetime.utcnow() + timedelta(days=365)
     db.session.commit()
 
+    # ✅ Notify user
+    send_notification(
+        current_user.id,
+        message="Your consent has been renewed successfully for another year.",
+        type="consent_update",
+        subject="Consent Renewal Successful"
+    )
+
     flash('Consent renewed successfully for another year.', 'success')
     return redirect(url_for('dashboard'))
+
 
 # ----------------------------------------------------------------
 # Grievance Management (User + Admin)
@@ -1233,9 +1253,19 @@ def grievance():
         db.session.add(grievance)
         db.session.commit()
 
+        # ✅ Notify user
+        send_notification(
+            current_user.id,
+            message=f"Your grievance has been submitted successfully. Reference Number: {ref_no}",
+            type="grievance_update",
+            subject="Grievance Submitted"
+        )
+
         flash(f"Grievance submitted successfully. Reference: {ref_no}", "success")
         return redirect(url_for('dashboard'))
+
     return render_template('grievance_form.html')
+
 
 @app.route('/admin/grievances')
 @login_required
@@ -1244,6 +1274,7 @@ def admin_grievances():
         abort(403)
     grievances = Grievance.query.order_by(Grievance.created_at.desc()).all()
     return render_template('admin_grievances.html', grievances=grievances)
+
 
 @app.route('/admin/grievances/<string:id>/resolve', methods=['POST'])
 @login_required
@@ -1259,6 +1290,15 @@ def resolve_grievance(id):
         description='Resolved by admin'
     ))
     db.session.commit()
+
+    # ✅ Notify user
+    send_notification(
+        grievance.user_id,
+        message=f"Your grievance (Ref: {grievance.reference_number}) has been resolved by the admin.",
+        type="grievance_update",
+        subject="Grievance Resolved"
+    )
+
     flash('Grievance marked as resolved.', 'success')
     return redirect(url_for('admin_grievances'))
 
