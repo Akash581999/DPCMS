@@ -109,3 +109,20 @@ def send_email_with_contacts_csv(recipient_email, fullname="User", csv_filepath=
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
         smtp.login(sender_email, app_password)
         smtp.send_message(msg)
+
+# ----------------------------------------------------------------
+# Consent and grievance notifications
+# ----------------------------------------------------------------
+# def send_notification(user_id, message, type="consent_update"):
+#     notif = Notification(
+#         user_id=user_id,
+#         fiduciary_id=None,
+#         type=type,
+#         message=message,
+#         channel="in_app",
+#         status="sent"
+#     )
+#     db.session.add(notif)
+#     db.session.commit()
+#     print(f"Notification sent to user {user_id}: {message}")
+# send_notification(current_user.id, "Your consent was successfully granted.")

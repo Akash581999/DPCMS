@@ -14,7 +14,6 @@
 
 <body>
     <div class="container mt-5 pt-4">
-        <h3 class="text-primary mb-4">Manage Roles</h3>
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         {% for category, message in messages %}
@@ -26,6 +25,7 @@
         {% endif %}
         {% endwith %}
 
+        <h3 class="text-primary mb-4">Manage Roles</h3>
         <!-- Add Role Form -->
         <form method="POST" class="card p-3 shadow-sm mb-4">
             {{ csrf_token() if csrf_token }}

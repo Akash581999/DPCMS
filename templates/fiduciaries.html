@@ -36,8 +36,9 @@
             <thead>
                 <tr>
                     <th>#</th>
-                    <th>Name</th>
-                    <th>Email</th>
+                    <th>Company Name</th>
+                    <th>Contact Email</th>
+                    <th>Created On</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -47,9 +48,10 @@
                     <td>{{ loop.index }}</td>
                     <td>{{ f.name }}</td>
                     <td>{{ f.contact_email }}</td>
+                    <td>{{ f.created_at.strftime('%Y-%m-%d') }}</td>
                     <td>
                         <form action="{{ url_for('delete_fiduciary', id=f.id) }}" method="POST" class="d-inline">
-                            <button class="btn btn-sm btn-danger"
+                            <button class="btn btn-sm btn-outline-danger"
                                 onclick="return confirm('Delete this fiduciary?')">Delete</button>
                         </form>
                     </td>

@@ -444,7 +444,7 @@ def logout():
     current_user.session_token = None
     db.session.commit()
     logout_user()
-    flash("You have been logged out successfully.", "info")
+    flash("You have been successfully logged out.", "info")
     return redirect(url_for('login'))
 
 @app.route('/api/logout', methods=['POST'])
@@ -455,7 +455,7 @@ def api_logout(current_user):
 
     current_user.session_token = None
     db.session.commit()
-    return jsonify({'message': 'You have been logged out successfully.'}), 200
+    return jsonify({'message': 'You have successfully been logged out.'}), 200
 
 @app.route('/resetpassword', methods=['GET', 'POST'])
 def resetpassword():
@@ -775,7 +775,7 @@ def api_consent_test():
     return jsonify({'status': 'success', 'message': f'Consent recorded for {fullname} (Form ID: {form_id}).'}), 201
 
 # ----------------------------------------------------------------
-# Admin view all consents
+# Admin panel view controls
 # ----------------------------------------------------------------
 @app.route('/showallusers')
 @login_required
@@ -928,182 +928,6 @@ def api_show_all_feedbacks(current_user):
         }
     }), 200
 
-@app.route('/showallcompanies')
-@login_required
-def showallcompanies():
-    user=current_user
-    session['user_role'] = [ur.role.role_name for ur in user.roles][0] if user.roles else 'employee'
-    if session['user_role'] != 'admin':
-        abort(403)
-    companies = DataFiduciary.query.order_by(DataFiduciary.company_id.desc()).all()
-    return render_template('showallcompanies.html', companies=companies)
-
-@app.route('/api/showallcompanies', methods=['GET'])
-@token_required
-def api_show_all_companies(current_user):
-    if current_user.role.name != 'admin':
-        return jsonify({'message': 'Forbidden – Admins only'}), 403
-
-    companies = DataFiduciary.query.order_by(DataFiduciary.company_id.desc()).all()
-    company_data = []
-    for company in companies:
-        company_data.append({
-            'company_id': company.company_id,
-            'name': company.name,
-            'address': company.address
-        })
-    return jsonify({'companies': company_data}), 200
-
-# ----------------------------------------------------------------
-# Consent Lifecycle Management
-# ----------------------------------------------------------------
-@app.route('/consent/withdraw', methods=['POST'])
-@login_required
-def withdraw_consent():
-    consent = Consent.query.filter_by(user_id=current_user.id).first()
-    if not consent or consent.status != 'granted':
-        flash('No active consent to withdraw.', 'warning')
-        return redirect(url_for('dashboard'))
-
-    consent.status = 'withdrawn'
-    consent.timestamp = datetime.utcnow()
-    db.session.commit()
-
-    flash('Your consent has been withdrawn successfully.', 'success')
-    return redirect(url_for('dashboard'))
-
-@app.route('/consent/renew', methods=['POST'])
-@login_required
-def renew_consent():
-    consent = Consent.query.filter_by(user_id=current_user.id).first()
-    if not consent:
-        flash('No consent record found to renew.', 'danger')
-        return redirect(url_for('dashboard'))
-
-    consent.status = 'granted'
-    consent.timestamp = datetime.utcnow()
-    consent.expiry_date = datetime.utcnow() + timedelta(days=365)
-    db.session.commit()
-
-    flash('Consent renewed successfully for another year.', 'success')
-    return redirect(url_for('dashboard'))
-
-# ----------------------------------------------------------------
-# Grievance Management (User + Admin)
-# ----------------------------------------------------------------
-@app.route('/grievance', methods=['GET', 'POST'])
-@login_required
-def grievance():
-    if request.method == 'POST':
-        category = request.form.get('category')
-        description = request.form.get('description')
-        ref_no = f"GRV-{uuid.uuid4().hex[:8].upper()}"
-
-        grievance = Grievance(
-            user_id=current_user.id,
-            category=category,
-            description=description,
-            reference_number=ref_no
-        )
-        db.session.add(grievance)
-        db.session.commit()
-
-        flash(f"Grievance submitted successfully. Reference: {ref_no}", "success")
-        return redirect(url_for('dashboard'))
-    return render_template('grievance_form.html')
-
-@app.route('/admin/grievances')
-@login_required
-def admin_grievances():
-    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
-        abort(403)
-    grievances = Grievance.query.order_by(Grievance.created_at.desc()).all()
-    return render_template('admin_grievances.html', grievances=grievances)
-
-@app.route('/admin/grievances/<string:id>/resolve', methods=['POST'])
-@login_required
-def resolve_grievance(id):
-    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
-        abort(403)
-
-    grievance = Grievance.query.get_or_404(id)
-    grievance.status = 'resolved'
-    db.session.add(GrievanceAction(
-        grievance_id=id,
-        action_taken_by=current_user.id,
-        description='Resolved by admin'
-    ))
-    db.session.commit()
-    flash('Grievance marked as resolved.', 'success')
-    return redirect(url_for('admin_grievances'))
-
-# ----------------------------------------------------------------
-# Consent and grievance notifications
-# ----------------------------------------------------------------
-# def send_notification(user_id, message, type="consent_update"):
-#     notif = Notification(
-#         user_id=user_id,
-#         fiduciary_id=None,
-#         type=type,
-#         message=message,
-#         channel="in_app",
-#         status="sent"
-#     )
-#     db.session.add(notif)
-#     db.session.commit()
-
-# send_notification(current_user.id, "Your consent was successfully granted.")
-
-# ----------------------------------------------------------------
-# Cookie Consent APIs
-# ----------------------------------------------------------------
-@app.route('/api/cookies', methods=['POST'])
-@token_required
-def api_set_cookie_consent(current_user):
-    data = request.get_json()
-    category = data.get('category')
-    status = data.get('status', 'granted')
-
-    existing = CookieConsent.query.filter_by(user_id=current_user.id, category=category).first()
-    if existing:
-        existing.status = status
-        existing.timestamp = datetime.utcnow()
-    else:
-        db.session.add(CookieConsent(
-            user_id=current_user.id,
-            category=category,
-            status=status,
-            timestamp=datetime.utcnow()
-        ))
-    db.session.commit()
-    return jsonify({'message': 'Cookie consent updated.'}), 200
-
-# ----------------------------------------------------------------
-# Admin Reporting / Audit Logs
-# ----------------------------------------------------------------
-@app.route('/admin/auditlogs')
-@login_required
-def view_audit_logs():
-    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
-        abort(403)
-    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(100).all()
-    return render_template('audit_logs.html', logs=logs)
-
-# ----------------------------------------------------------------
-# External Consent Viewing (Admin)
-# ----------------------------------------------------------------
-@app.route('/admin/externalconsents')
-@login_required
-def view_external_consents():
-    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
-        abort(403)
-    consents = ExternalConsent.query.order_by(ExternalConsent.submitted_at.desc()).all()
-    return render_template('external_consents.html', consents=consents)
-
-
-# ----------------------------------------------------------------
-# ADMIN CRUD MANAGEMENT ROUTES
-# ----------------------------------------------------------------
 from sqlalchemy.exc import IntegrityError
 
 # ---------------------------------------------------------------------
@@ -1112,7 +936,6 @@ from sqlalchemy.exc import IntegrityError
 @app.route('/admin/roles', methods=['GET', 'POST'])
 @login_required
 def admin_roles():
-    """Admin: Manage user roles (view + add)."""
     user = current_user
     roles = Role.query.order_by(Role.created_at.desc()).all()
     if not user or user.primary_role != 'admin':
@@ -1146,13 +969,11 @@ def admin_roles():
 @app.route('/admin/roles/delete/<string:id>', methods=['POST'])
 @login_required
 def delete_role(id):
-    """Admin: Delete a role by ID."""
     if not current_user or current_user.primary_role != 'admin':
         abort(403)
 
     role = Role.query.get_or_404(id)
 
-    # Prevent deleting a role assigned to users
     assigned_users = UserRole.query.filter_by(role_id=role.id).count()
     if assigned_users > 0:
         flash('Cannot delete a role that is currently assigned to users.', 'warning')
@@ -1166,7 +987,6 @@ def delete_role(id):
 @app.route('/api/admin/roles', methods=['GET', 'POST'])
 @login_required
 def api_admin_roles():
-    """API endpoint for admin role management."""
     if not current_user or current_user.primary_role != 'admin':
         return jsonify({'error': 'Access denied'}), 403
 
@@ -1199,7 +1019,6 @@ def api_admin_roles():
             db.session.rollback()
             return jsonify({'error': 'Database integrity error.'}), 500
 
-    # GET all roles
     roles = Role.query.order_by(Role.created_at.desc()).all()
     return jsonify([{
         'id': role.id,
@@ -1211,7 +1030,6 @@ def api_admin_roles():
 @app.route('/api/admin/roles/<string:id>', methods=['DELETE'])
 @login_required
 def api_delete_role(id):
-    """API endpoint to delete a role (admin only)."""
     if not current_user or current_user.primary_role != 'admin':
         return jsonify({'error': 'Access denied'}), 403
 
@@ -1261,7 +1079,6 @@ def delete_fiduciary(id):
     db.session.commit()
     flash('Data Fiduciary deleted successfully.', 'success')
     return redirect(url_for('admin_fiduciaries'))
-
 
 # ----------------------------
 # 3️⃣ PURPOSE MANAGEMENT
@@ -1361,6 +1178,135 @@ def delete_mailtemplate(id):
     db.session.commit()
     flash('Mail template deleted.', 'success')
     return redirect(url_for('admin_mailtemplates'))
+
+# ----------------------------------------------------------------
+# Consent Lifecycle Management
+# ----------------------------------------------------------------
+@app.route('/consent/withdraw', methods=['POST'])
+@login_required
+def withdraw_consent():
+    consent = Consent.query.filter_by(user_id=current_user.id).first()
+    if not consent or consent.status != 'granted':
+        flash('No active consent to withdraw.', 'warning')
+        return redirect(url_for('dashboard'))
+
+    consent.status = 'withdrawn'
+    consent.timestamp = datetime.utcnow()
+    db.session.commit()
+
+    flash('Your consent has been withdrawn successfully.', 'success')
+    return redirect(url_for('dashboard'))
+
+@app.route('/consent/renew', methods=['POST'])
+@login_required
+def renew_consent():
+    consent = Consent.query.filter_by(user_id=current_user.id).first()
+    if not consent:
+        flash('No consent record found to renew.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    consent.status = 'granted'
+    consent.timestamp = datetime.utcnow()
+    consent.expiry_date = datetime.utcnow() + timedelta(days=365)
+    db.session.commit()
+
+    flash('Consent renewed successfully for another year.', 'success')
+    return redirect(url_for('dashboard'))
+
+# ----------------------------------------------------------------
+# Grievance Management (User + Admin)
+# ----------------------------------------------------------------
+@app.route('/grievance', methods=['GET', 'POST'])
+@login_required
+def grievance():
+    if request.method == 'POST':
+        category = request.form.get('category')
+        description = request.form.get('description')
+        ref_no = f"GRV-{uuid.uuid4().hex[:8].upper()}"
+
+        grievance = Grievance(
+            user_id=current_user.id,
+            category=category,
+            description=description,
+            reference_number=ref_no
+        )
+        db.session.add(grievance)
+        db.session.commit()
+
+        flash(f"Grievance submitted successfully. Reference: {ref_no}", "success")
+        return redirect(url_for('dashboard'))
+    return render_template('grievance_form.html')
+
+@app.route('/admin/grievances')
+@login_required
+def admin_grievances():
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        abort(403)
+    grievances = Grievance.query.order_by(Grievance.created_at.desc()).all()
+    return render_template('admin_grievances.html', grievances=grievances)
+
+@app.route('/admin/grievances/<string:id>/resolve', methods=['POST'])
+@login_required
+def resolve_grievance(id):
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        abort(403)
+
+    grievance = Grievance.query.get_or_404(id)
+    grievance.status = 'resolved'
+    db.session.add(GrievanceAction(
+        grievance_id=id,
+        action_taken_by=current_user.id,
+        description='Resolved by admin'
+    ))
+    db.session.commit()
+    flash('Grievance marked as resolved.', 'success')
+    return redirect(url_for('admin_grievances'))
+
+# ----------------------------------------------------------------
+# Cookie Consent APIs
+# ----------------------------------------------------------------
+@app.route('/api/cookies', methods=['POST'])
+@token_required
+def api_set_cookie_consent(current_user):
+    data = request.get_json()
+    category = data.get('category')
+    status = data.get('status', 'granted')
+
+    existing = CookieConsent.query.filter_by(user_id=current_user.id, category=category).first()
+    if existing:
+        existing.status = status
+        existing.timestamp = datetime.utcnow()
+    else:
+        db.session.add(CookieConsent(
+            user_id=current_user.id,
+            category=category,
+            status=status,
+            timestamp=datetime.utcnow()
+        ))
+    db.session.commit()
+    return jsonify({'message': 'Cookie consent updated.'}), 200
+
+# ----------------------------------------------------------------
+# Admin Reporting / Audit Logs
+# ----------------------------------------------------------------
+@app.route('/admin/auditlogs')
+@login_required
+def view_audit_logs():
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        abort(403)
+    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(100).all()
+    return render_template('audit_logs.html', logs=logs)
+
+# ----------------------------------------------------------------
+# External Consent Viewing (Admin)
+# ----------------------------------------------------------------
+@app.route('/admin/externalconsents')
+@login_required
+def view_external_consents():
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        abort(403)
+    consents = ExternalConsent.query.order_by(ExternalConsent.submitted_at.desc()).all()
+    return render_template('external_consents.html', consents=consents)
 
 # ----------------------------------------------------------------
 # Run app
