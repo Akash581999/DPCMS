@@ -77,9 +77,9 @@
             <p>Welcome to your personalized DPCMS dashboard.</p>
 
             <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
+                <a href="{{ url_for('consent_status') }}" class="btn btn-outline-primary">Manage Consent</a>
                 <a href="{{ url_for('dashboard') }}" class="btn btn-outline-info">Give Feedback</a>
                 <a href="{{ url_for('dashboard') }}" class="btn btn-outline-dark">My Feedbacks</a>
-                <a href="{{ url_for('profile') }}" class="btn btn-outline-secondary">My Profile</a>
             </div>
         </div>
 

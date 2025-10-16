@@ -846,17 +846,36 @@ def api_show_all_users(current_user):
 @app.route('/showallconsents')
 @login_required
 def showallconsents():
+    # ✅ Only admins can access
     if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
         abort(403)
-    consents = Consent.query.order_by(Consent.timestamp.desc()).all()
+
+    # ✅ Exclude consents belonging to admin users
+    consents = (
+        Consent.query
+        .join(Users, Consent.user_id == Users.id)
+        .filter(~Users.roles.any(UserRole.role.has(Role.role_name == 'admin')))
+        .order_by(Consent.timestamp.desc())
+        .all()
+    )
     return render_template('showallconsents.html', consents=consents)
 
 @app.route('/api/showallconsents')
 @token_required
 def api_showallconsents(current_user):
+    # ✅ Only admins can access
     if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
         return jsonify({'message': 'Admins only.'}), 403
-    consents = Consent.query.order_by(Consent.timestamp.desc()).all()
+
+    # ✅ Exclude consents belonging to admin users
+    consents = (
+        Consent.query
+        .join(Users, Consent.user_id == Users.id)
+        .filter(~Users.roles.any(UserRole.role.has(Role.role_name == 'admin')))
+        .order_by(Consent.timestamp.desc())
+        .all()
+    )
+
     return jsonify({
         'status': 'success',
         'consents': [
@@ -1184,6 +1203,21 @@ def delete_mailtemplate(id):
 # Consent Lifecycle Management
 # ----------------------------------------------------------------
 from sendmail import send_notification
+
+@app.before_request
+def check_user_consent():
+    if current_user.is_authenticated:
+        consent = Consent.query.filter_by(user_id=current_user.id).first()
+        # If consent is withdrawn, redirect to consent form
+        if consent and consent.status == 'withdrawn':
+            if request.endpoint not in ('renew_consent', 'consent_status', 'logout', 'static'):
+                return redirect(url_for('consent_status'))
+
+@app.route('/consent/status')
+@login_required
+def consent_status():
+    consent = Consent.query.filter_by(user_id=current_user.id).first()
+    return render_template('consent_status.html', user=current_user, consent=consent)
 
 @app.route('/consent/withdraw', methods=['POST'])
 @login_required

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+        crossorigin="anonymous"></script>
+    <title>Consent Status</title>
+</head>
+
+<body>
+    <div class="container mt-5 pt-4">
+        <h3 class="text-primary mb-3">My Consent Status</h3>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="card shadow-sm border-0 rounded-3">
+            <div class="card-body">
+                {% if consent %}
+                <p><strong>Status:</strong>
+                    {% if consent.status == 'granted' %}
+                    <span class="badge bg-success">Granted</span>
+                    {% elif consent.status == 'withdrawn' %}
+                    <span class="badge bg-danger">Withdrawn</span>
+                    {% else %}
+                    <span class="badge bg-secondary">{{ consent.status|capitalize }}</span>
+                    {% endif %}
+                </p>
+                <p><strong>Last Updated:</strong>
+                    {{ consent.timestamp.strftime('%Y-%m-%d %H:%M') if consent.timestamp else '-' }}
+                </p>
+                <p><strong>Expiry Date:</strong>
+                    {{ consent.expiry_date.strftime('%Y-%m-%d') if consent.expiry_date else 'N/A' }}
+                </p>
+                <hr>
+
+                <div class="d-flex gap-3">
+                    {% if consent.status == 'granted' %}
+                    <form action="{{ url_for('withdraw_consent') }}" method="POST">
+                        <button type="submit" class="btn btn-outline-danger"
+                            onclick="return confirm('Are you sure you want to withdraw your consent?')">
+                            Withdraw Consent
+                        </button>
+                    </form>
+                    {% elif consent.status == 'withdrawn' %}
+                    <p class="text-danger">You have withdrawn your consent. Please renew to continue using the portal.
+                    </p>
+                    <form method="POST" action="{{ url_for('renew_consent') }}">
+                        <button type="submit" class="btn btn-success">Renew Consent</button>
+                    </form>
+                    {% endif %}
+                </div>
+
+                {% else %}
+                <p class="text-muted">No consent record found. Please provide your consent to continue using our
+                    services.</p>
+                <form action="{{ url_for('renew_consent') }}" method="POST">
+                    <button type="submit" class="btn btn-primary">Grant Consent</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Back</a>
+        </div>
+    </div>
+</body>
+
+</html>
