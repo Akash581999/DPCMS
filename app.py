@@ -867,32 +867,34 @@ def showallconsents():
 @app.route('/api/showallconsents')
 @token_required
 def api_showallconsents(current_user):
+    # ✅ Only admins can access
     if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
         return jsonify({'message': 'Admins only.'}), 403
 
+    # ✅ Join Users table and exclude admin users
     consents = (
-        Consent.query
+        db.session.query(Consent, Users)
         .join(Users, Consent.user_id == Users.id)
         .filter(~Users.roles.any(UserRole.role.has(Role.role_name == 'admin')))
         .order_by(Consent.timestamp.desc())
         .all()
     )
 
-    # Include user email and fullname
+    # Build JSON response
     return jsonify({
         'status': 'success',
         'consents': [
             {
-                'id': c.id,
-                'user_id': c.user_id,
-                'fullname': users_dict[c.user_id].fullname if c.user_id in users_dict else None, # type: ignore
-                'email': users_dict[c.user_id].email if c.user_id in users_dict else None, # type: ignore
-                'purpose_id': getattr(c, 'purpose_id', None),
-                'form_id': getattr(c, 'form_id', None),
-                'status': c.status,
-                'method': getattr(c, 'method', 'Form'),
-                'timestamp': c.timestamp.isoformat() if c.timestamp else None,
-                'expiry_date': c.expiry_date.isoformat() if c.expiry_date else None
+                'id': c.Consent.id,
+                'user_id': c.Consent.user_id,
+                'fullname': c.Users.fullname,
+                'email': c.Users.email,
+                'purpose_id': getattr(c.Consent, 'purpose_id', None),
+                'form_id': getattr(c.Consent, 'form_id', None),
+                'status': c.Consent.status,
+                'method': getattr(c.Consent, 'method', 'Form'),
+                'timestamp': c.Consent.timestamp.isoformat() if c.Consent.timestamp else None,
+                'expiry_date': c.Consent.expiry_date.isoformat() if c.Consent.expiry_date else None
             } for c in consents
         ]
     }), 200
@@ -1209,7 +1211,7 @@ def delete_mailtemplate(id):
     return redirect(url_for('admin_mailtemplates'))
 
 # ----------------------------------------------------------------
-# Consent Lifecycle Management
+# User Consent Lifecycle Management
 # ----------------------------------------------------------------
 from sendmail import send_notification
 
@@ -1276,9 +1278,8 @@ def renew_consent():
     flash('Consent renewed successfully for another year.', 'success')
     return redirect(url_for('dashboard'))
 
-
 # ----------------------------------------------------------------
-# Grievance Management (User + Admin)
+# User Grievance Management (User + Admin)
 # ----------------------------------------------------------------
 @app.route('/grievance', methods=['GET', 'POST'])
 @login_required
