@@ -858,16 +858,18 @@ def showallconsents():
         .order_by(Consent.timestamp.desc())
         .all()
     )
-    return render_template('showallconsents.html', consents=consents)
+
+    # ✅ Map user_id to user object for template
+    users_dict = {user.id: user for user in Users.query.all()}
+
+    return render_template('showallconsents.html', consents=consents, users=users_dict)
 
 @app.route('/api/showallconsents')
 @token_required
 def api_showallconsents(current_user):
-    # ✅ Only admins can access
     if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
         return jsonify({'message': 'Admins only.'}), 403
 
-    # ✅ Exclude consents belonging to admin users
     consents = (
         Consent.query
         .join(Users, Consent.user_id == Users.id)
@@ -876,14 +878,21 @@ def api_showallconsents(current_user):
         .all()
     )
 
+    # Include user email and fullname
     return jsonify({
         'status': 'success',
         'consents': [
             {
                 'id': c.id,
                 'user_id': c.user_id,
+                'fullname': users_dict[c.user_id].fullname if c.user_id in users_dict else None, # type: ignore
+                'email': users_dict[c.user_id].email if c.user_id in users_dict else None, # type: ignore
+                'purpose_id': getattr(c, 'purpose_id', None),
+                'form_id': getattr(c, 'form_id', None),
                 'status': c.status,
-                'timestamp': c.timestamp.isoformat() if c.timestamp else None
+                'method': getattr(c, 'method', 'Form'),
+                'timestamp': c.timestamp.isoformat() if c.timestamp else None,
+                'expiry_date': c.expiry_date.isoformat() if c.expiry_date else None
             } for c in consents
         ]
     }), 200

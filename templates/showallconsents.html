@@ -30,25 +30,20 @@
                     <th scope="col">Consent ID</th>
                     <th scope="col">Full Name</th>
                     <th scope="col">Email</th>
-                    <th scope="col">Purpose</th>
+                    <th scope="col">Purpose ID</th>
                     <th scope="col">Status</th>
                     <th scope="col">Method</th>
-                    <th scope="col">Timestamp</th>
+                    <th scope="col">Consent Date</th>
+                    <th scope="col">Expire On</th>
                 </tr>
             </thead>
             <tbody>
                 {% for consent in consents %}
                 <tr>
-                    <!-- Handle both Consent and ExternalConsent -->
                     <td>{{ consent.id }}</td>
-                    <td>
-                        {% if consent.fullname %}
-                        {{ consent.fullname }}
-                        {% else %}
-                        User ID: {{ consent.user_id }}
-                        {% endif %}
-                    </td>
-                    <td>{{ consent.email or '-' }}</td>
+                    <td>{{ users[consent.user_id].fullname if consent.user_id in users else 'User ID: ' ~
+                        consent.user_id }}</td>
+                    <td>{{ users[consent.user_id].email if consent.user_id in users else '-' }}</td>
                     <td>
                         {% if consent.form_id %}
                         External Form #{{ consent.form_id }}
@@ -56,25 +51,11 @@
                         Purpose ID: {{ consent.purpose_id }}
                         {% endif %}
                     </td>
-                    <td>
-                        {% if consent.status %}
-                        {{ consent.status|capitalize }}
-                        {% elif consent.consent_given %}
-                        Granted
-                        {% else %}
-                        -
-                        {% endif %}
-                    </td>
+                    <td>{{ consent.status|capitalize if consent.status else '-' }}</td>
                     <td>{{ consent.method or 'Form' }}</td>
-                    <td>
-                        {% if consent.timestamp %}
-                        {{ consent.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
-                        {% elif consent.submitted_at %}
-                        {{ consent.submitted_at.strftime('%Y-%m-%d %H:%M:%S') }}
-                        {% else %}
-                        -
-                        {% endif %}
-                    </td>
+                    <td>{{ consent.timestamp.strftime('%Y-%m-%d %H:%M:%S') if consent.timestamp else
+                        (consent.submitted_at.strftime('%Y-%m-%d %H:%M:%S') if consent.submitted_at else '-') }}</td>
+                    <td>{{ consent.expiry_date.strftime('%Y-%m-%d') if consent.expiry_date else 'N/A' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
