@@ -512,11 +512,27 @@ def dashboard():
     if not has_valid_consent(current_user):
         flash("Consent missing or expired.", "warning")
         return redirect(url_for('consent'))
-    return render_template('dashboard.html', user=current_user)
 
-@app.route('/api/dashboard', methods=['GET'])
+    # ✅ Summary counts for user
+    unread_notifications = Notification.query.filter_by(user_id=current_user.id, status='sent').count()
+    active_consents = Consent.query.filter_by(user_id=current_user.id, status='granted').count()
+    grievances_count = Grievance.query.filter_by(user_id=current_user.id).count()
+
+    return render_template(
+        'dashboard.html',
+        user=current_user,
+        unread_notifications=unread_notifications,
+        active_consents=active_consents,
+        grievances_count=grievances_count
+    )
+
+@app.route('/api/dashboard/summary', methods=['GET'])
 @token_required
-def api_dashboard(current_user):
+def api_dashboard_summary(current_user):
+    unread_notifications = Notification.query.filter_by(user_id=current_user.id, status='unread').count()
+    active_consents = Consent.query.filter_by(user_id=current_user.id, status='granted').count()
+    grievances_count = Grievance.query.filter_by(user_id=current_user.id).count()
+
     if not has_valid_consent(current_user):
         return jsonify({
             'message': 'Consent required',
@@ -526,7 +542,10 @@ def api_dashboard(current_user):
     return jsonify({
         'message': f"Welcome {current_user.fullname}",
         'email': current_user.email,
-        'roles': [ur.role.role_name for ur in current_user.roles] if current_user.roles else []
+        'roles': [ur.role.role_name for ur in current_user.roles] if current_user.roles else [],
+        'unread_notifications': unread_notifications,
+        'active_consents': active_consents,
+        'grievances_count': grievances_count
     }), 200
 
 @app.route('/profile')
