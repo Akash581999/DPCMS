@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Consents</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h3 class="mb-4">📝 My Consents</h3>
+        {% if consents %}
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Purpose</th>
+                    <th>Data Fiduciary</th>
+                    <th>Status</th>
+                    <th>Method</th>
+                    <th>Granted On</th>
+                    <th>Expiry</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in consents %}
+                <tr>
+                    <td>{{ c.purpose.purpose_name if c.purpose else '-' }}</td>
+                    <td>{{ c.fiduciary.name if c.fiduciary else '-' }}</td>
+                    <td>
+                        {% if c.status == 'granted' %}
+                        <span class="badge bg-success">Granted</span>
+                        {% elif c.status == 'withdrawn' %}
+                        <span class="badge bg-danger">Withdrawn</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ c.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ c.method or '-' }}</td>
+                    <td>{{ c.timestamp.strftime('%Y-%m-%d %H:%M:%S') if c.timestamp else '-' }}</td>
+                    <td>{{ c.expiry_date.strftime('%Y-%m-%d') if c.expiry_date else '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No consents recorded yet.</p>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary mt-3">Back</a>
+    </div>
+</body>
+
+</html>

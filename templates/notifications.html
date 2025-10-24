@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Notifications</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h3 class="mb-4">📢 Notifications</h3>
+        {% if notifications %}
+        <div class="list-group">
+            {% for n in notifications %}
+            <div
+                class="list-group-item d-flex justify-content-between align-items-start {% if n.status == 'unread' %}list-group-item-warning{% endif %}">
+                <div>
+                    <strong>{{ n.type|replace('_',' ')|capitalize }}</strong>
+                    <p class="mb-1">{{ n.message }}</p>
+                    <small class="text-muted">{{ n.created_at.strftime('%Y-%m-%d %H:%M:%S') if n.created_at else ''
+                        }}</small>
+                </div>
+                <span class="badge bg-{{ 'secondary' if n.status == 'read' else 'info' }}">{{ n.status|capitalize
+                    }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p>No notifications yet.</p>
+        {% endif %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary mt-3">Back</a>
+    </div>
+</body>
+
+</html>

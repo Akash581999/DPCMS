@@ -1210,6 +1210,26 @@ def delete_mailtemplate(id):
     flash('Mail template deleted.', 'success')
     return redirect(url_for('admin_mailtemplates'))
 
+@app.route('/notifications')
+@login_required
+def notifications():
+    notifications = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).all()
+    return render_template('notifications.html', notifications=notifications, user=current_user)
+
+@app.route('/api/notifications', methods=['GET'])
+@token_required
+def api_notifications(current_user):
+    """Get all notifications for current user."""
+    notifications = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).all()
+    data = [{
+        'id': n.id,
+        'message': n.message,
+        'type': n.type,
+        'status': n.status,
+        'timestamp': n.created_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(n, 'created_at') and n.created_at else None
+    } for n in notifications]
+    return jsonify({'notifications': data}), 200
+
 # ----------------------------------------------------------------
 # User Consent Lifecycle Management
 # ----------------------------------------------------------------
@@ -1277,6 +1297,27 @@ def renew_consent():
 
     flash('Consent renewed successfully for another year.', 'success')
     return redirect(url_for('dashboard'))
+
+@app.route('/myconsents')
+@login_required
+def myconsents():
+    consents = Consent.query.filter_by(user_id=current_user.id).order_by(Consent.timestamp.desc()).all()
+    return render_template('myconsents.html', consents=consents, user=current_user)
+
+@app.route('/api/myconsents', methods=['GET'])
+@token_required
+def api_my_consents(current_user):
+    consents = Consent.query.filter_by(user_id=current_user.id).all()
+    return jsonify({
+        'consents': [{
+            'id': c.id,
+            'purpose': c.purpose.purpose_name if c.purpose else None,
+            'fiduciary': c.fiduciary.name if c.fiduciary else None,
+            'status': c.status,
+            'method': c.method,
+            'timestamp': c.timestamp.strftime('%Y-%m-%d %H:%M:%S') if c.timestamp else None
+        } for c in consents]
+    }), 200
 
 # ----------------------------------------------------------------
 # User Grievance Management (User + Admin)
@@ -1475,6 +1516,25 @@ def api_resolve_grievance(id):
         "reference_number": grievance.reference_number,
         "status": grievance.status
     }), 200
+
+@app.route('/mygrievances')
+@login_required
+def mygrievances():
+    grievances = Grievance.query.filter_by(user_id=current_user.id).order_by(Grievance.created_at.desc()).all()
+    return render_template('mygrievances.html', grievances=grievances, user=current_user)
+
+@app.route('/api/mygrievances', methods=['GET'])
+@token_required
+def api_my_grievances(current_user):
+    grievances = Grievance.query.filter_by(user_id=current_user.id).order_by(Grievance.created_at.desc()).all()
+    data = [{
+        'reference_number': g.reference_number,
+        'category': g.category,
+        'description': g.description,
+        'status': g.status,
+        'created_at': g.created_at.strftime('%Y-%m-%d %H:%M:%S') if g.created_at else None
+    } for g in grievances]
+    return jsonify({'grievances': data}), 200
 
 # ----------------------------------------------------------------
 # Cookie Consent APIs
