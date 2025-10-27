@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin – All Grievances</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h3 class="mb-4 text-primary">⚖️ All User Grievances</h3>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% if grievances %}
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Reference No.</th>
+                    <th>User</th>
+                    <th>Email</th>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th>Submitted On</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in grievances %}
+                <tr>
+                    <td>{{ g.reference_number }}</td>
+                    <td>{{ g.user.fullname if g.user else '—' }}</td>
+                    <td>{{ g.user.email if g.user else '—' }}</td>
+                    <td>{{ g.category }}</td>
+                    <td>{{ g.description }}</td>
+                    <td>
+                        {% if g.status == 'resolved' %}
+                        <span class="badge bg-success">Resolved</span>
+                        {% elif g.status == 'pending' %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ g.status|capitalize }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ g.created_at.strftime('%Y-%m-%d %H:%M:%S') if g.created_at else '-' }}</td>
+                    <td>
+                        {% if g.status != 'resolved' %}
+                        <form method="POST" action="{{ url_for('resolve_grievance', id=g.id) }}"
+                            style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-success">Resolve</button>
+                        </form>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No grievances found in the system.</p>
+        {% endif %}
+
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary mt-3">Back</a>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
