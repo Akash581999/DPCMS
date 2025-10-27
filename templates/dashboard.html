@@ -64,7 +64,8 @@
             <hr>
         </div>
 
-        <!-- ✅ Summary Cards -->
+        <!-- ✅ USER SUMMARY CARDS -->
+        {% if user.primary_role != 'admin' %}
         <div class="row text-center mt-4">
             <div class="col-md-4 mb-3">
                 <div class="card bg-success text-white dashboard-card">
@@ -97,13 +98,58 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         {% if user.primary_role == 'admin' %}
         <!-- -------------------- ADMIN DASHBOARD -------------------- -->
         <div class="text-center mt-4">
             <h3 class="mb-3 text-primary">Admin Dashboard</h3>
             <p>Manage users, companies, and consent data.</p>
+        </div>
 
+        <!-- ✅ ADMIN SUMMARY CARDS -->
+        <div class="row text-center mt-4">
+            <div class="col-md-3 mb-3">
+                <div class="card bg-primary text-white dashboard-card">
+                    <div class="card-body">
+                        <h5 class="card-title">👥 Users</h5>
+                        <h2>{{ total_users }}</h2>
+                        <a href="{{ url_for('showallusers') }}" class="btn btn-light btn-sm mt-2">Manage Users</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card bg-success text-white dashboard-card">
+                    <div class="card-body">
+                        <h5 class="card-title">📝 Consents</h5>
+                        <h2>{{ total_consents }}</h2>
+                        <a href="{{ url_for('showallconsents') }}" class="btn btn-light btn-sm mt-2">View Consents</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card bg-warning text-dark dashboard-card">
+                    <div class="card-body">
+                        <h5 class="card-title">💬 Feedbacks</h5>
+                        <h2>{{ total_feedbacks }}</h2>
+                        <a href="{{ url_for('showallfeedbacks') }}" class="btn btn-dark btn-sm mt-2">View Feedbacks</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card bg-danger text-white dashboard-card">
+                    <div class="card-body">
+                        <h5 class="card-title">⚖️ Grievances</h5>
+                        <h2>{{ total_grievances }}</h2>
+                        <a href="{{ url_for('admin_grievances') }}" class="btn btn-light btn-sm mt-2">View
+                            Grievances</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ✅ Existing Admin Controls (kept intact) -->
+        <div class="text-center mt-4">
             <div class="d-flex flex-wrap justify-content-center gap-3 mt-4">
                 <a href="{{ url_for('showallusers') }}" class="btn btn-outline-primary">View All Users</a>
                 <a href="{{ url_for('showallconsents') }}" class="btn btn-outline-danger">View All Consents</a>
@@ -112,9 +158,9 @@
                 <a href="{{ url_for('admin_roles') }}" class="btn btn-outline-warning">Manage Roles</a>
                 <a href="{{ url_for('admin_purposes') }}" class="btn btn-outline-secondary">Manage Purposes</a>
                 <a href="{{ url_for('admin_mailtemplates') }}" class="btn btn-outline-dark">Mail Templates</a>
+                <a href="{{ url_for('admin_grievances') }}" class="btn btn-outline-danger">Manage Grievances</a>
             </div>
         </div>
-
         {% else %}
         <!-- -------------------- USER DASHBOARD -------------------- -->
         <div class="text-center mt-4">
@@ -128,7 +174,6 @@
                 <a href="{{ url_for('notifications') }}" class="btn btn-info me-2">My Notifications</a>
             </div>
         </div>
-
         {% endif %}
     </div>
 </body>

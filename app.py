@@ -513,18 +513,38 @@ def dashboard():
         flash("Consent missing or expired.", "warning")
         return redirect(url_for('consent'))
 
-    # ✅ Summary counts for user
-    unread_notifications = Notification.query.filter_by(user_id=current_user.id, status='sent').count()
-    active_consents = Consent.query.filter_by(user_id=current_user.id, status='granted').count()
-    grievances_count = Grievance.query.filter_by(user_id=current_user.id).count()
+    if any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        # ✅ Admin Summary Stats
+        total_users = Users.query.count()
+        total_consents = Consent.query.count()
+        total_feedbacks = Contacts.query.count()
+        total_grievances = Grievance.query.count()
+        total_external_consents = ExternalConsent.query.count()
 
-    return render_template(
-        'dashboard.html',
-        user=current_user,
-        unread_notifications=unread_notifications,
-        active_consents=active_consents,
-        grievances_count=grievances_count
-    )
+        return render_template(
+            'dashboard.html',
+            user=current_user,
+            is_admin=True,
+            total_users=total_users,
+            total_consents=total_consents,
+            total_feedbacks=total_feedbacks,
+            total_grievances=total_grievances,
+            total_external_consents=total_external_consents
+        )
+    else:
+        # ✅ Regular User Summary Stats
+        unread_notifications = Notification.query.filter_by(user_id=current_user.id, status='sent').count()
+        active_consents = Consent.query.filter_by(user_id=current_user.id, status='granted').count()
+        grievances_count = Grievance.query.filter_by(user_id=current_user.id).count()
+
+        return render_template(
+            'dashboard.html',
+            user=current_user,
+            is_admin=False,
+            unread_notifications=unread_notifications,
+            active_consents=active_consents,
+            grievances_count=grievances_count
+        )
 
 @app.route('/api/dashboard/summary', methods=['GET'])
 @token_required
@@ -546,6 +566,20 @@ def api_dashboard_summary(current_user):
         'unread_notifications': unread_notifications,
         'active_consents': active_consents,
         'grievances_count': grievances_count
+    }), 200
+
+@app.route('/api/dashboard/admin-summary', methods=['GET'])
+@token_required
+def api_admin_dashboard_summary(current_user):
+    if not any(ur.role.role_name == 'admin' for ur in current_user.roles):
+        return jsonify({'error': 'Admins only'}), 403
+
+    return jsonify({
+        'total_users': Users.query.count(),
+        'total_consents': Consent.query.count(),
+        'total_feedbacks': Contacts.query.count(),
+        'total_grievances': Grievance.query.count(),
+        'total_external_consents': ExternalConsent.query.count()
     }), 200
 
 @app.route('/profile')
